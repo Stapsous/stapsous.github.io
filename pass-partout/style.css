@@ -63,7 +63,16 @@ header.trip { display: grid; gap: 6px; }
 .ev .body { display: grid; gap: 4px; min-width: 0; }
 .ev .title { font-weight: 600; }
 .ev.key .title { font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; line-height: 1.15; }
-.ev.past { opacity: .5; }
+.ev.past { opacity: .55; }
+.ev.past .title, .ev.past .t { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.ev.next { background: var(--accent); color: var(--accent-ink); border-radius: 12px; padding: 10px 12px; margin: 4px -12px; border-bottom-color: transparent; }
+.ev.next .muted, .ev.next .t s, .ev.next .t i { color: var(--accent-ink); opacity: .75; }
+.ev.next .chip { border-color: rgba(18,25,43,.35); }
+.ev.next .chip.live { background: var(--accent-ink); color: var(--accent); border-color: var(--accent-ink); }
+.ev.next .chip.est { color: var(--accent-ink); border-color: var(--accent-ink); background: transparent; }
+.ev.next .btn { border-color: var(--accent-ink); }
+.ev.next .note { background: rgba(255,255,255,.55); color: #7a3e00; }
+.nextlbl { font-family: var(--font-display); font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: .8rem; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: .8rem; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; background: var(--surface); }
 .chip.strong { background: var(--ink); color: var(--bg); border-color: var(--ink); font-family: var(--font-code); font-weight: 700; }

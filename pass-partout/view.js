@@ -162,12 +162,15 @@ export function nextEvent(events, now = Date.now()) {
   return events.find((e) => new Date(e.at).getTime() >= now - 10 * 60000) || null;
 }
 
-function renderEvent(e, tz, now) {
-  const past = new Date(e.at).getTime() < now - 30 * 60000;
+function renderEvent(e, tz, now, status) {
+  const past = status === "past", isNext = status === "next";
+  const t = new Date(e.at).getTime();
+  const relTxt = isNext ? (t > now ? rel(t - now) : "maintenant") : "";
   const links = (e.links || []).map((l) => `<a class="btn${l.primary ? " primary" : ""}" href="${esc(l.url)}"${l.url.startsWith("#") ? "" : ' target="_blank" rel="noopener"'}>${esc(l.label)}</a>`).join("");
-  return `<li class="ev${e.key ? " key" : ""}${past ? " past" : ""}"${e.flightId ? ` data-flight="${esc(e.flightId)}"` : ""}>
+  return `<li class="ev${e.key ? " key" : ""}${past ? " past" : ""}${isNext ? " next" : ""}"${isNext ? ' aria-current="step"' : ""}${e.flightId ? ` data-flight="${esc(e.flightId)}"` : ""}>
     <span class="t">${e.revised ? `${e.revised}<s>${hhmm(e.at, tz)}</s>` : e.estimated ? `≈${hhmm(e.at, tz)}<i>estimé</i>` : hhmm(e.at, tz)}</span>
     <div class="body">
+      ${isNext ? `<span class="nextlbl">Prochaine étape · ${esc(relTxt)}</span>` : ""}
       <span class="title">${esc(e.title)}</span>
       ${e.chips?.length ? `<div class="chips">${e.chips.join("")}</div>` : ""}
       ${e.note ? `<span class="note">${esc(e.note)}</span>` : ""}
@@ -189,8 +192,8 @@ export function renderTrip(trip, docs = {}, live = {}, now = Date.now()) {
     d.items.push(e);
   });
   const nx = nextEvent(events, now);
-  const nxWhen = nx ? (() => { const p = fmtParts(nx.at, tz); const t = new Date(nx.at).getTime();
-    return `${cap(p.weekday)} ${p.day} ${p.month} à ${p.time} · ${t > now ? rel(t - now) : "maintenant"}`; })() : "Bon retour !";
+  const nxIdx = nx ? events.indexOf(nx) : events.length;
+  const statusOf = (e) => { const i = events.indexOf(e); return i < nxIdx ? "past" : i === nxIdx ? "next" : "future"; };
 
   const flights = trip.flights || [];
   const docCards = flights.map((f) => {
@@ -243,12 +246,7 @@ export function renderTrip(trip, docs = {}, live = {}, now = Date.now()) {
       <h1>${esc(trip.title)}, ${esc(fmtParts(trip.start_at, tz).day)} → ${esc(fmtParts(trip.end_at, tz).day)} ${esc(fmtParts(trip.end_at, tz).month)}</h1>
       ${trip.subtitle ? `<div class="muted">${esc(trip.subtitle)}</div>` : ""}
     </header>
-    <section class="next" aria-live="polite">
-      <span class="lbl">Prochaine étape</span>
-      <span class="what">${esc(nx ? nx.title : "Voyage terminé")}</span>
-      <span class="when">${esc(nxWhen)}</span>
-    </section>
-    ${days.map((d) => `<section class="day"><div class="day-head"><h2>${esc(d.label)}</h2></div><ol class="timeline">${d.items.map((e) => renderEvent(e, tz, now)).join("")}</ol></section>`).join("")}
+    ${days.map((d) => `<section class="day"><div class="day-head"><h2>${esc(d.label)}</h2></div><ol class="timeline">${d.items.map((e) => renderEvent(e, tz, now, statusOf(e))).join("")}</ol></section>`).join("")}
     <section class="cards">
       <h2>Documents</h2>${docCards}
       ${parkingCard || hotelCard || refsCard ? `<h2>Pratique</h2>${parkingCard}${hotelCard}${refsCard}` : ""}

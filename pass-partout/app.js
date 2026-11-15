@@ -4,7 +4,7 @@ import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signI
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, collection, query, where, onSnapshot, doc, getDocs }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=4";
+import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=5";
 
 // Configuration publique du projet Firebase (protégée par les règles Firestore et les domaines autorisés).
 const FIREBASE_CONFIG = {
@@ -61,11 +61,16 @@ function render() {
   if (!trip) { $app.innerHTML = renderHome(state.trips, state.user); return; }
   watchTrip(trip.id);
   $app.innerHTML = installBanner() + renderTrip(trip, state.docs[trip.id] || {}, state.live[trip.id] || {});
+  if (scrolledTo !== trip.id) { // à l'ouverture d'un voyage, amener la prochaine étape à l'écran
+    scrolledTo = trip.id;
+    const nx = $app.querySelector(".ev.next");
+    if (nx && !location.hash.startsWith("#doc-")) nx.scrollIntoView({ block: "center" });
+  }
 }
 
 // ---------------------------------------------------------------- Firebase
 
-let auth, db, watched = null, liveUnsub = null;
+let auth, db, watched = null, liveUnsub = null, scrolledTo = null;
 
 function watchTrip(id) {
   if (watched === id) return;
@@ -155,8 +160,9 @@ window.addEventListener("hashchange", () => {
     document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: "start" });
     return;
   }
+  scrolledTo = null;
   render();
-  window.scrollTo(0, 0);
+  if (!$app.querySelector(".ev.next")) window.scrollTo(0, 0);
 });
 setInterval(() => { if (state.user && state.loaded && !scan.classList.contains("open")) render(); }, 60000);
 
