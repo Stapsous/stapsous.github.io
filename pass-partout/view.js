@@ -123,7 +123,10 @@ export function buildEvents(trip, live = {}, docs = {}) {
       f.gate_close_at ? `Porte fermée à ${hhmm(new Date(new Date(f.gate_close_at).getTime() + shiftMs).toISOString(), tzDep)}.` : "",
       boarding ? "" : `Horaire estimé${f.boarding_before_min ? ` (${f.boarding_before_min} min avant le départ)` : ""}.`].filter(Boolean).join(" ");
     const doc = f.boarding_pass && docs[f.boarding_pass];
-    ev.push({ at: boardAt, estimated: !boarding, title: `Embarquement ${f.airline} ${f.display || f.flight}`,
+    const viaParking = p && f === flights[0];
+    const airport = `Aéroport ${f.from_name || f.from}${f.from_terminal ? " Terminal " + f.from_terminal : ""}`;
+    ev.push({ at: boardAt,
+      links: viaParking ? [] : [{ label: `Itinéraire vers ${f.from_name || "l'aéroport"}`, url: maps(airport, "transit") }], estimated: !boarding, title: `Embarquement ${f.airline} ${f.display || f.flight}`,
       chips: bchips, text: btxt,
       scan: doc ? { id: f.boarding_pass, img: doc.barcode || doc.image, label: doc.meta || doc.label } : null,
       pendingScan: !doc ? (f.checkin_open_at ? `Carte d'embarquement disponible après l'enregistrement (${shortDate(f.checkin_open_at, tz)} à ${hhmm(f.checkin_open_at, tz)}).` : "Carte d'embarquement pas encore ajoutée.") : null });
@@ -140,8 +143,6 @@ export function buildEvents(trip, live = {}, docs = {}) {
 
     const arrLinks = [];
     let arrText = "";
-    const arrivesAtHotel = h && f !== last && f.arr_at <= h.checkin_at.slice(0, 10) + "T23:59";
-    if (arrivesAtHotel) arrLinks.push({ label: "Itinéraire vers l'hôtel", url: maps(`${h.name}, ${h.address}`, "transit") });
     if (f === last && flights.length > 1) {
       if (p) arrText = `Puis ${p.name} : sortie prévue ${hhmm(p.exit_at, tz)}${p.tolerance_h ? `, tolérance de ${p.tolerance_h} h sans supplément` : ""}. Ticket d'entrée à présenter.`;
       if (trip.home) arrLinks.push({ label: "Itinéraire vers la maison", url: maps(trip.home, "driving") });
@@ -150,10 +151,9 @@ export function buildEvents(trip, live = {}, docs = {}) {
   });
 
   if (h) {
-    ev.push({ at: h.checkin_at, title: `Check-in ${h.name}`, text: `${h.address}. Bagages déposables avant si besoin.` });
-    const nextF = flights.find((f) => f.dep_at > h.checkout_at);
-    ev.push({ at: h.checkout_at, title: `Check-out ${h.name}`, text: h.to_pay ? `À régler : ${h.to_pay}.` : "",
-      links: nextF ? [{ label: `Itinéraire vers ${nextF.from_name || nextF.from}`, url: maps(`Aéroport ${nextF.from_name || nextF.from}${nextF.from_terminal ? " Terminal " + nextF.from_terminal : ""}`, "transit") }] : [] });
+    ev.push({ at: h.checkin_at, title: `Check-in ${h.name}`, text: `${h.address}. Bagages déposables avant si besoin.`,
+      links: [{ label: "Itinéraire vers l'hôtel", url: maps(`${h.name}, ${h.address}`, "transit") }] });
+    ev.push({ at: h.checkout_at, title: `Check-out ${h.name}`, text: h.to_pay ? `À régler : ${h.to_pay}.` : "" });
   }
   return ev.filter((e) => e.at).sort((a, b) => new Date(a.at) - new Date(b.at));
 }
@@ -187,7 +187,7 @@ export function renderTrip(trip, docs = {}, live = {}, now = Date.now()) {
   events.forEach((e) => {
     const p = fmtParts(e.at, tz);
     let d = days[days.length - 1];
-    if (!d || d.key !== p.dayKey) days.push(d = { key: p.dayKey, label: `${cap(p.weekday)} ${p.day}`, items: [] });
+    if (!d || d.key !== p.dayKey) days.push(d = { key: p.dayKey, label: `${cap(p.weekday)} ${p.day} ${p.month}`, items: [] });
     d.items.push(e);
   });
   const nx = nextEvent(events, now);
