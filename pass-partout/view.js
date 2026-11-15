@@ -100,7 +100,7 @@ export function buildEvents(trip, live = {}, docs = {}) {
   const last = flights[flights.length - 1];
 
   if (p) {
-    ev.push({ at: p.access_at || p.entry_at, title: p.name,
+    ev.push({ icon: "parking", at: p.access_at || p.entry_at, title: p.name,
       chips: [`<span class="chip strong">${esc(p.code)}</span>`],
       text: `Accès possible dès ${hhmm(p.access_at || p.entry_at, tz)} (réservé à ${hhmm(p.entry_at, tz)}). ${p.instructions || ""}`,
       links: [{ label: "Itinéraire vers le parking", url: maps(p.place || p.name, "driving") }] });
@@ -110,7 +110,7 @@ export function buildEvents(trip, live = {}, docs = {}) {
     const l = live[f.id];
     const tzDep = tz;
     if (f.checkin_open_at) {
-      ev.push({ at: f.checkin_open_at, title: `Enregistrement ${f.airline} ouvert`,
+      ev.push({ icon: "checkin", at: f.checkin_open_at, title: `Enregistrement ${f.airline} ouvert`,
         chips: [`<span class="chip strong">${esc(f.booking_ref)}</span>`, `<span class="chip">jusqu'à 1 h avant le départ</span>`],
         links: f.checkin_url ? [{ label: `S'enregistrer chez ${f.airline}`, url: f.checkin_url }] : [] });
     }
@@ -132,7 +132,7 @@ export function buildEvents(trip, live = {}, docs = {}) {
     const doc = f.boarding_pass && docs[f.boarding_pass];
     const viaParking = p && f === flights[0];
     const airport = `Aéroport ${f.from_name || f.from}${f.from_terminal ? " Terminal " + f.from_terminal : ""}`;
-    ev.push({ at: boardAt,
+    ev.push({ icon: "boarding", at: boardAt,
       links: viaParking ? [] : [{ label: `Itinéraire vers ${f.from_name || "l'aéroport"}`, url: maps(airport, "transit") }], estimated: !boarding, title: `Embarquement ${f.airline} ${f.display || f.flight}`,
       chips: bchips, text: btxt,
       flightRef: f.id,
@@ -143,7 +143,7 @@ export function buildEvents(trip, live = {}, docs = {}) {
     if (f.seat) chips.push(`<span class="chip strong">${esc(f.seat)}</span>`);
     if (f.booking_ref) chips.push(`<span class="chip">Réf. ${esc(f.booking_ref)}</span>`);
     if (f.bags) chips.push(`<span class="chip">${esc(f.bags)}</span>`);
-    ev.push({ at: f.dep_at, key: true, flightId: f.id,
+    ev.push({ icon: "takeoff", at: f.dep_at, key: true, flightId: f.id,
       title: `${f.airline} ${f.display || f.flight} · ${f.from} → ${f.to}`,
       chips: [...liveChips(l, f, tzDep).filter((c) => !c.includes("Porte ")), ...chips], note: f.note,
       revised: l && l.revised_utc && (new Date(l.revised_utc) - new Date(f.dep_at)) >= 5 * 60000 ? hhmm(l.revised_utc, tzDep) : null,
@@ -155,7 +155,7 @@ export function buildEvents(trip, live = {}, docs = {}) {
       if (p) arrText = `Puis ${p.name} : sortie prévue ${hhmm(p.exit_at, tz)}${p.tolerance_h ? `, tolérance de ${p.tolerance_h} h sans supplément` : ""}. Ticket d'entrée à présenter.`;
       if (trip.home) arrLinks.push({ label: "Itinéraire vers la maison", url: maps(trip.home, "driving") });
     }
-    ev.push({ at: f.arr_at, title: `Arrivée ${f.to_name || f.to}${f.to_terminal ? `, terminal ${f.to_terminal}` : ""}`, text: arrText, links: arrLinks });
+    ev.push({ icon: "landing", at: f.arr_at, title: `Arrivée ${f.to_name || f.to}${f.to_terminal ? `, terminal ${f.to_terminal}` : ""}`, text: arrText, links: arrLinks });
   });
 
   hotels.forEach((h, i) => {
@@ -163,10 +163,10 @@ export function buildEvents(trip, live = {}, docs = {}) {
     const tag = hotels.length > 1 && h.booking_ref ? ` (résa ${h.booking_ref})` : "";
     const sameAsPrev = prev && prev.name === h.name && prev.checkout_at.slice(0, 10) === h.checkin_at.slice(0, 10);
     const sameAsNext = next && next.name === h.name && h.checkout_at.slice(0, 10) === next.checkin_at.slice(0, 10);
-    ev.push({ at: h.checkin_at, title: sameAsPrev ? `Nouvelle réservation ${h.name}${tag}` : `Check-in ${h.name}${tag}`,
+    ev.push({ icon: "hotel", at: h.checkin_at, title: sameAsPrev ? `Nouvelle réservation ${h.name}${tag}` : `Check-in ${h.name}${tag}`,
       text: sameAsPrev ? "Même hôtel : voir à la réception si la chambre change." : `${h.address}. Bagages déposables avant si besoin.`,
       links: sameAsPrev ? [] : [{ label: "Itinéraire vers l'hôtel", url: maps(`${h.name}, ${h.address}`, "transit") }] });
-    ev.push({ at: h.checkout_at, title: sameAsNext ? `Fin de la réservation${tag}` : `Check-out ${h.name}${tag}`,
+    ev.push({ icon: "hotel", at: h.checkout_at, title: sameAsNext ? `Fin de la réservation${tag}` : `Check-out ${h.name}${tag}`,
       text: h.to_pay ? `À régler : ${h.to_pay}.` : "" });
   });
   // Autres réservations importées des mails : trains, cars, locations, événements, restaurants
@@ -174,23 +174,23 @@ export function buildEvents(trip, live = {}, docs = {}) {
     const ref = x.ref ? [`<span class="chip">Réf. ${esc(x.ref)}</span>`] : [];
     if (x.kind === "train" || x.kind === "bus") {
       const label = x.kind === "train" ? "Train" : "Car";
-      ev.push({ at: x.at, key: true, title: `${label} ${[x.operator, x.number].filter(Boolean).join(" ")} · ${x.from_name} → ${x.to_name}`,
+      ev.push({ icon: x.kind, at: x.at, key: true, title: `${label} ${[x.operator, x.number].filter(Boolean).join(" ")} · ${x.from_name} → ${x.to_name}`,
         chips: [...(x.seat ? [`<span class="chip strong">${x.coach ? "Voiture " + esc(x.coach) + " · " : ""}Place ${esc(x.seat)}</span>`] : []), ...ref],
         links: [{ label: `Itinéraire vers ${x.from_name}`, url: maps(x.from_name, "transit") }] });
-      if (x.end && x.end !== x.at) ev.push({ at: x.end, title: `Arrivée ${x.to_name}` });
+      if (x.end && x.end !== x.at) ev.push({ icon: x.kind, at: x.end, title: `Arrivée ${x.to_name}` });
     } else if (x.kind === "car") {
-      ev.push({ at: x.at, title: `Prise du véhicule ${x.company || ""}`.trim(), chips: ref, text: x.pickup,
+      ev.push({ icon: "car", at: x.at, title: `Prise du véhicule ${x.company || ""}`.trim(), chips: ref, text: x.pickup,
         links: x.pickup ? [{ label: "Itinéraire vers l'agence", url: maps(x.pickup, "transit") }] : [] });
-      if (x.end && x.end !== x.at) ev.push({ at: x.end, title: "Restitution du véhicule", text: x.dropoff,
+      if (x.end && x.end !== x.at) ev.push({ icon: "car", at: x.end, title: "Restitution du véhicule", text: x.dropoff,
         links: x.dropoff ? [{ label: "Itinéraire vers l'agence", url: maps(x.dropoff, "driving") }] : [] });
     } else if (x.kind === "note") {
-      ev.push({ at: x.at, title: x.title || "Note", text: x.text || "" });
+      ev.push({ icon: "note", at: x.at, title: x.title || "Note", text: x.text || "" });
     } else {
       const chips = [...ref];
       if (x.people) chips.unshift(`<span class="chip strong">${esc(x.people)} pers.</span>`);
       if (x.prepaid) chips.push(`<span class="chip">${esc(x.prepaid)}</span>`);
       const text = [x.address, x.dress, x.phone && `Tél. ${x.phone}`].filter(Boolean).join(" · ");
-      ev.push({ at: x.at, key: x.kind === "restaurant", title: (x.kind === "restaurant" ? "Dîner · " : "") + (x.name || (x.kind === "restaurant" ? "Restaurant" : "Événement")),
+      ev.push({ icon: x.kind === "restaurant" ? "restaurant" : "note", at: x.at, key: x.kind === "restaurant", title: (x.kind === "restaurant" ? "Dîner · " : "") + (x.name || (x.kind === "restaurant" ? "Restaurant" : "Événement")),
         chips, text, links: x.address ? [{ label: "Itinéraire", url: maps(`${x.name || ""}, ${x.address}`, "transit") }] : [] });
     }
   });
@@ -207,13 +207,28 @@ export function nextEvent(events, now = Date.now()) {
   return null;
 }
 
+const ICONS = {
+  parking: '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M10 17V7h3a3 3 0 0 1 0 6h-3"/>',
+  checkin: '<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M9.5 12l2 2 3.5-4"/>',
+  boarding: '<path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v8a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2z"/><path d="M15 6v2m0 3v2m0 3v2"/>',
+  takeoff: '<path d="M2 20h20"/><path d="M3.5 14.5l2.3 2.1c.4.3.9.4 1.4.3L21 13.4a1.6 1.6 0 0 0-.8-3.1l-4.6 1.2L9.5 6.5l-2.3.6 3.3 5.1-3.4.9-2-1.4-1.7.5z"/>',
+  landing: '<path d="M2 20h20"/><path d="M3.8 6.6l.7 5.4c.1.5.4.9.9 1.1l13.6 3.6a1.6 1.6 0 0 0 .8-3.1l-4.6-1.2-2.7-7.4-2.3-.6.7 6-3.4-.9-.8-2.3z"/>',
+  hotel: '<path d="M3 19V6M3 15h18v4M21 15v-3a3 3 0 0 0-3-3h-7v6"/><circle cx="7" cy="11" r="2"/>',
+  train: '<rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14M9 20l-2 2m8-2l2 2M9 13h.01M15 13h.01"/>',
+  bus: '<rect x="4" y="3" width="16" height="15" rx="2.5"/><path d="M4 11h16M7 21v-3m10 3v-3M8 14.5h.01M16 14.5h.01"/>',
+  car: '<path d="M5 16V11l2-5h10l2 5v5z"/><path d="M5 11h14M6 16v3m12-3v3M8 13.5h.01M16 13.5h.01"/>',
+  note: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  restaurant: '<path d="M7 3v8a2 2 0 0 0 2 2v8M5 3v5a2 2 0 0 0 2 2M11 3v5a2 2 0 0 1-2 2M17 21V3c-2 1-3 3.5-3 7v3h3"/>',
+};
+const icon = (k) => ICONS[k] ? `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>` : `<span class="ico"></span>`;
+
 function renderEvent(e, tz, now, status) {
   const past = status === "past", isNext = status === "next";
   const t = new Date(e.at).getTime();
   const relTxt = isNext ? (t > now ? rel(t - now) : "maintenant") : "";
   const links = (e.links || []).map((l) => `<a class="btn${l.primary ? " primary" : ""}" href="${esc(l.url)}"${l.url.startsWith("#") ? "" : ' target="_blank" rel="noopener"'}>${esc(l.label)}</a>`).join("");
   return `<li class="ev${e.key ? " key" : ""}${past ? " past" : ""}${isNext ? " is-next" : ""}"${isNext ? ' aria-current="step"' : ""}${e.flightId ? ` data-flight="${esc(e.flightId)}"` : ""}>
-    <span class="t"><span class="hl">${e.revised ? `${e.revised}<s>${hhmm(e.at, tz)}</s>` : e.estimated ? `≈${hhmm(e.at, tz)}<i>estimé</i>` : hhmm(e.at, tz)}</span></span>
+    ${icon(e.icon)}<span class="t"><span class="hl">${e.revised ? `${e.revised}<s>${hhmm(e.at, tz)}</s>` : e.estimated ? `≈${hhmm(e.at, tz)}<i>estimé</i>` : hhmm(e.at, tz)}</span></span>
     <div class="body">
       <span class="title"><span class="hl">${esc(e.title)}</span>${isNext ? `<span class="rel">${esc(relTxt)}</span>` : ""}</span>
       ${e.chips?.length ? `<div class="chips">${e.chips.join("")}</div>` : ""}
