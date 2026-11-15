@@ -163,9 +163,9 @@ footer { font-size: .82rem; color: var(--muted); display: grid; gap: 4px; }
 .jump { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
   margin: 0 -16px; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
 .jump::-webkit-scrollbar { display: none; }
-.jump button { flex: none; font: 600 .85rem var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
-  border-radius: 999px; padding: 6px 12px; cursor: pointer; }
-.jump button[data-jump="next"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.jump button { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 600 .82rem var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 999px; padding: 7px 4px; cursor: pointer; }
+.jump button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .sec { scroll-margin-top: 56px; }
 .ndf-line, .ev { scroll-margin-top: 56px; }
 

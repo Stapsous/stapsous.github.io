@@ -324,7 +324,7 @@ export function renderTrip(trip, docs = {}, live = {}, now = Date.now(), extra =
       ${trip.subtitle ? `<div class="muted">${esc(trip.subtitle)}</div>` : ""}
     </header>
     <nav class="jump" aria-label="Aller à">
-      ${nx ? `<button type="button" data-jump="next">Prochaine étape</button>` : ""}
+      <button type="button" data-jump="next" class="on">Voyage</button>
       ${flights.length ? `<button type="button" data-jump="sec-docs">Documents</button>` : ""}
       ${parkingCard || hotelCard || refsCard ? `<button type="button" data-jump="sec-pratique">Pratique</button>` : ""}
       ${extra ? `<button type="button" data-jump="sec-ndf">NDF</button>` : ""}

@@ -4,10 +4,10 @@ import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signI
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, collection, query, where, onSnapshot, doc, getDocs, writeBatch, setDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=22";
+import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=24";
 import { extract, normalize, buildTrips, dropKnown, htmlOf, GMAIL_QUERY } from "./importer.js?v=10";
 import { readCard, matchFlight, CARD_QUERY, attachmentsOf, b64urlToBlob } from "./cards.js?v=10";
-import { renderNdf, ndfLines } from "./ndf.js?v=22";
+import { renderNdf, ndfLines } from "./ndf.js?v=24";
 
 // Configuration publique du projet Firebase (protégée par les règles Firestore et les domaines autorisés).
 const FIREBASE_CONFIG = {
@@ -88,6 +88,7 @@ function render() {
     if (k in dayOpen) d.open = dayOpen[k];
     d.addEventListener("toggle", () => { dayOpen[k] = d.open; });
   });
+  spy();
   if (scrolledTo !== trip.id) { // à l'ouverture d'un voyage, amener la prochaine étape à l'écran
     scrolledTo = trip.id;
     const nx = $app.querySelector(".ev.is-next");
@@ -180,7 +181,7 @@ document.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-action],[data-copy],[data-scan],[data-jump]");
   if (!el) return;
   if (el.dataset.jump) {
-    const target = el.dataset.jump === "next" ? $app.querySelector(".ev.is-next") : document.getElementById(el.dataset.jump);
+    const target = el.dataset.jump === "next" ? ($app.querySelector(".ev.is-next") || $app.querySelector("details.day:not(.sec)")) : document.getElementById(el.dataset.jump);
     if (!target) return;
     const d = target.closest("details") || target;
     if (d.tagName === "DETAILS" && !d.open) d.open = true;
@@ -476,3 +477,25 @@ document.addEventListener("submit", async (e) => {
   } catch (err) { say(`Dépense non ajoutée : ${err.code || err.message}`); }
   finally { hideBusy(); }
 });
+
+// ---------------------------------------------------------------- onglet en cours (jaune) selon le défilement
+
+function spy() {
+  const nav = $app.querySelector(".jump");
+  if (!nav) return;
+  const limit = nav.getBoundingClientRect().bottom + 12;
+  let cur = "next";
+  for (const b of nav.querySelectorAll("button[data-jump]")) {
+    if (b.dataset.jump === "next") continue;
+    const sec = document.getElementById(b.dataset.jump);
+    if (sec && sec.getBoundingClientRect().top <= limit) cur = b.dataset.jump;
+  }
+  // en bas de page, la dernière section visible l'emporte
+  if (innerHeight + scrollY >= document.documentElement.scrollHeight - 4) {
+    const last = [...nav.querySelectorAll("button[data-jump]")].pop();
+    if (last) cur = last.dataset.jump;
+  }
+  nav.querySelectorAll("button[data-jump]").forEach((b) => b.classList.toggle("on", b.dataset.jump === cur));
+}
+let spyRaf = 0;
+addEventListener("scroll", () => { cancelAnimationFrame(spyRaf); spyRaf = requestAnimationFrame(spy); }, { passive: true });
