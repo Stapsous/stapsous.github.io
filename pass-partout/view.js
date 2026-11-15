@@ -158,8 +158,14 @@ export function buildEvents(trip, live = {}, docs = {}) {
   return ev.filter((e) => e.at).sort((a, b) => new Date(a.at) - new Date(b.at));
 }
 
+/** Une étape est passée 15 min avant l'heure de la suivante (la dernière : 15 min après son heure). */
 export function nextEvent(events, now = Date.now()) {
-  return events.find((e) => new Date(e.at).getTime() >= now - 10 * 60000) || null;
+  const M = 15 * 60000;
+  for (let i = 0; i < events.length; i++) {
+    const limit = i + 1 < events.length ? new Date(events[i + 1].at).getTime() - M : new Date(events[i].at).getTime() + M;
+    if (now < limit) return events[i];
+  }
+  return null;
 }
 
 function renderEvent(e, tz, now, status) {
@@ -170,7 +176,7 @@ function renderEvent(e, tz, now, status) {
   return `<li class="ev${e.key ? " key" : ""}${past ? " past" : ""}${isNext ? " is-next" : ""}"${isNext ? ' aria-current="step"' : ""}${e.flightId ? ` data-flight="${esc(e.flightId)}"` : ""}>
     <span class="t"><span class="hl">${e.revised ? `${e.revised}<s>${hhmm(e.at, tz)}</s>` : e.estimated ? `≈${hhmm(e.at, tz)}<i>estimé</i>` : hhmm(e.at, tz)}</span></span>
     <div class="body">
-      <span class="title"><span class="hl">${esc(e.title)}</span>${isNext ? ` <span class="rel">${esc(relTxt)}</span>` : ""}</span>
+      <span class="title"><span class="hl">${esc(e.title)}</span>${isNext ? `<span class="rel">${esc(relTxt)}</span>` : ""}</span>
       ${e.chips?.length ? `<div class="chips">${e.chips.join("")}</div>` : ""}
       ${e.note ? `<span class="note">${esc(e.note)}</span>` : ""}
       ${e.text ? `<span class="muted">${esc(e.text)}</span>` : ""}

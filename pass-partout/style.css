@@ -71,7 +71,7 @@ header.trip { display: grid; gap: 6px; }
 .ev .hl { padding: 0 3px; margin: 0 -3px; border-radius: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .ev.is-next .hl { background: var(--accent); color: var(--accent-ink); }
 .ev.is-next .t s, .ev.is-next .t i { color: var(--accent-ink); }
-.ev .rel { font-family: var(--font-body); font-size: .8rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.ev .rel { margin-left: 10px; font-family: var(--font-body); font-size: .8rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: .8rem; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; background: var(--surface); }
 .chip.strong { background: var(--ink); color: var(--bg); border-color: var(--ink); font-family: var(--font-code); font-weight: 700; }
