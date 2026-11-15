@@ -176,9 +176,15 @@ export function buildEvents(trip, live = {}, docs = {}) {
         links: x.pickup ? [{ label: "Itinéraire vers l'agence", url: maps(x.pickup, "transit") }] : [] });
       if (x.end && x.end !== x.at) ev.push({ at: x.end, title: "Restitution du véhicule", text: x.dropoff,
         links: x.dropoff ? [{ label: "Itinéraire vers l'agence", url: maps(x.dropoff, "driving") }] : [] });
+    } else if (x.kind === "note") {
+      ev.push({ at: x.at, title: x.title || "Note", text: x.text || "" });
     } else {
-      ev.push({ at: x.at, title: x.name || (x.kind === "restaurant" ? "Restaurant" : "Événement"), chips: ref, text: x.address,
-        links: x.address ? [{ label: "Itinéraire", url: maps(x.address, "transit") }] : [] });
+      const chips = [...ref];
+      if (x.people) chips.unshift(`<span class="chip strong">${esc(x.people)} pers.</span>`);
+      if (x.prepaid) chips.push(`<span class="chip">${esc(x.prepaid)}</span>`);
+      const text = [x.address, x.dress, x.phone && `Tél. ${x.phone}`].filter(Boolean).join(" · ");
+      ev.push({ at: x.at, key: x.kind === "restaurant", title: (x.kind === "restaurant" ? "Dîner · " : "") + (x.name || (x.kind === "restaurant" ? "Restaurant" : "Événement")),
+        chips, text, links: x.address ? [{ label: "Itinéraire", url: maps(`${x.name || ""}, ${x.address}`, "transit") }] : [] });
     }
   });
   return ev.filter((e) => e.at).sort((a, b) => new Date(a.at) - new Date(b.at));

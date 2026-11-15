@@ -1,5 +1,5 @@
 // Pass-partout : l'appli s'ouvre même sans réseau (les données viennent du cache Firestore).
-const VERSION = "pp-10";
+const VERSION = "pp-11";
 const SHELL = ["./", "index.html", "style.css", "app.js", "view.js", "importer.js", "cards.js", "manifest.webmanifest",
   "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "icon.svg"];
 
