@@ -2,7 +2,7 @@
 <rect width="100" height="100" rx="20" fill="#12192b"/><g transform="translate(3.50 3.00) scale(0.96)">
 <path fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" d="M42 20C36 8 24 6 12 10"/>
 <g transform="rotate(-12 50 50)">
-<path fill="#ffffff" d="M36 12H64L78 26V82a6 6 0 0 1-6 6H28a6 6 0 0 1-6-6V26Z"/>
-<circle fill="none" stroke="#f5c400" stroke-width="3" cx="50" cy="25" r="5"/><circle fill="#12192b" cx="50" cy="25" r="3.5"/>
+<path fill="#f5c400" d="M36 12H64L78 26V82a6 6 0 0 1-6 6H28a6 6 0 0 1-6-6V26Z"/>
+<circle fill="none" stroke="#ffffff" stroke-width="3" cx="50" cy="25" r="5"/><circle fill="#12192b" cx="50" cy="25" r="3.5"/>
 <circle fill="#12192b" cx="50" cy="51" r="8.5"/><path fill="#12192b" d="M45 56L42 77H58L55 56Z"/>
 </g></g></svg>
