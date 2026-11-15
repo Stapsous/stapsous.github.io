@@ -4,9 +4,10 @@ import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signI
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, collection, query, where, onSnapshot, doc, getDocs, writeBatch, setDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=12";
+import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=13";
 import { extract, normalize, buildTrips, dropKnown, htmlOf, GMAIL_QUERY } from "./importer.js?v=10";
 import { readCard, matchFlight, CARD_QUERY, attachmentsOf, b64urlToBlob } from "./cards.js?v=10";
+import { renderNdf, ndfLines } from "./ndf.js?v=13";
 
 // Configuration publique du projet Firebase (protégée par les règles Firestore et les domaines autorisés).
 const FIREBASE_CONFIG = {
@@ -19,7 +20,7 @@ const FIREBASE_CONFIG = {
 };
 
 const $app = document.getElementById("app");
-const state = { user: null, trips: [], loaded: false, docs: {}, cards: {}, live: {}, unsub: [], error: null };
+const state = { user: null, trips: [], loaded: false, docs: {}, cards: {}, live: {}, ndf: {}, unsub: [], error: null };
 
 function screenLogin(msg) {
   $app.innerHTML = `<div class="login">
@@ -69,7 +70,14 @@ function render() {
     docs["card-" + f.id] = cards[f.id]; // une carte ajoutée depuis l'appli remplace celle de trips.yaml
     return { ...f, boarding_pass: "card-" + f.id };
   }) };
-  $app.innerHTML = installBanner() + renderTrip(shown, docs, state.live[trip.id] || {});
+  const isOwner = (trip.viewers || [])[0] === (state.user.email || "").toLowerCase();
+  const ndfHtml = trip.pro && isOwner ? renderNdf(trip, state.ndf[trip.id] || {}) : "";
+  const form = $app.querySelector("#ndf-form");
+  const keepOpen = form?.closest("details").open;
+  const typed = form ? [...form.elements].filter((x) => x.name && x.type !== "file").map((x) => [x.name, x.value]) : [];
+  $app.innerHTML = installBanner() + renderTrip(shown, docs, state.live[trip.id] || {}, Date.now(), ndfHtml);
+  const form2 = $app.querySelector("#ndf-form");
+  if (form2) { if (keepOpen) form2.closest("details").open = true; typed.forEach(([n, v]) => { form2.elements[n].value = v; }); }
   // Garder les jours pliés/dépliés à la main lors des rafraîchissements
   $app.querySelectorAll("details.day").forEach((d) => {
     const k = trip.id + "|" + d.dataset.day;
@@ -85,7 +93,7 @@ function render() {
 
 // ---------------------------------------------------------------- Firebase
 
-let auth, db, watched = null, liveUnsub = null, cardsUnsub = null, scrolledTo = null;
+let auth, db, watched = null, liveUnsub = null, cardsUnsub = null, ndfUnsub = null, scrolledTo = null;
 const dayOpen = {};
 
 function watchTrip(id) {
@@ -93,6 +101,15 @@ function watchTrip(id) {
   watched = id;
   if (liveUnsub) liveUnsub();
   if (cardsUnsub) cardsUnsub();
+  if (ndfUnsub) { ndfUnsub(); ndfUnsub = null; }
+  // Note de frais (voyages pro, propriétaire seulement)
+  const t = state.trips.find((x) => x.id === id);
+  if (t?.pro && (t.viewers || [])[0] === (state.user.email || "").toLowerCase()) {
+    ndfUnsub = onSnapshot(collection(db, "trips", id, "ndf"), (snap) => {
+      state.ndf[id] = Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
+      render();
+    }, (e) => console.warn("ndf", e));
+  }
   // Cartes d'embarquement ajoutées depuis l'appli
   cardsUnsub = onSnapshot(collection(db, "trips", id, "cards"), (snap) => {
     state.cards[id] = Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
@@ -160,7 +177,7 @@ document.addEventListener("click", async (e) => {
   if (!el) return;
   if (el.dataset.scan) return openScan(el.dataset.scan);
   if (el.dataset.copy) {
-    try { await navigator.clipboard.writeText(el.dataset.copy); say("Code copié"); } catch { say("Copie impossible : " + el.dataset.copy); }
+    try { await navigator.clipboard.writeText(el.dataset.copy); say("Copié : " + el.dataset.copy.slice(0, 40)); } catch { say("Copie impossible : " + el.dataset.copy); }
     return;
   }
   if (el.dataset.action === "login") {
@@ -193,6 +210,7 @@ document.addEventListener("click", async (e) => {
     } finally { hideBusy(); }
     return;
   }
+  if (el.dataset.action?.startsWith("ndf-")) { ndfAction(el, e); return; }
   if (el.dataset.action === "logout") { await signOut(auth); history.replaceState(null, "", location.pathname); }
 });
 
@@ -363,3 +381,86 @@ window.addEventListener("hashchange", () => {
 setInterval(() => { if (state.user && state.loaded && !scan.classList.contains("open")) render(); }, 60000);
 
 start();
+
+// ---------------------------------------------------------------- note de frais
+
+const ndfRef = (lineId) => doc(db, "trips", watched, "ndf", lineId);
+const ndfSet = (lineId, data) => setDoc(ndfRef(lineId), { ...data, uid: state.user.uid, updated_at: new Date().toISOString() }, { merge: true });
+const ndfLine = (lineId) => ndfLines(state.trips.find((t) => t.id === watched) || {}, state.ndf[watched] || {}).find((l) => l.id === lineId);
+const parseAmount = (v) => { const n = Number(String(v || "").replace(/\s|€/g, "").replace(",", ".")); return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null; };
+
+// Photo compressée en JPEG (< 900 ko en data URL), PDF gardé tel quel s'il est léger
+async function receiptData(file) {
+  const asUrl = (blob) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(blob); });
+  if (file.type === "application/pdf") {
+    const u = await asUrl(file);
+    if (u.length > 940000) throw new Error("PDF trop lourd (900 ko max) : prends plutôt une photo");
+    return u;
+  }
+  const bmp = await createImageBitmap(file);
+  for (const [max, q] of [[1800, 0.75], [1400, 0.7], [1100, 0.65], [900, 0.6]]) {
+    const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    const u = c.toDataURL("image/jpeg", q);
+    if (u.length < 900000) return u;
+  }
+  throw new Error("Image trop lourde");
+}
+
+const receiptInput = document.createElement("input");
+receiptInput.type = "file"; receiptInput.accept = "image/*,application/pdf"; receiptInput.hidden = true;
+document.body.appendChild(receiptInput);
+let receiptTarget = null;
+receiptInput.addEventListener("change", async () => {
+  const file = receiptInput.files[0]; receiptInput.value = "";
+  if (!file || !receiptTarget) return;
+  showBusy("Enregistrement du justificatif…");
+  try { await ndfSet(receiptTarget, { receipt_img: await receiptData(file) }); say("Justificatif ajouté"); }
+  catch (err) { say(`Justificatif non enregistré : ${err.message || err.code}`); }
+  finally { hideBusy(); }
+});
+
+async function ndfAction(el, e) {
+  const id = el.dataset.line, a = el.dataset.action;
+  try {
+    if (a === "ndf-goto") { e.preventDefault(); document.querySelector(el.getAttribute("href"))?.scrollIntoView({ block: "start", behavior: "smooth" }); return; }
+    if (a === "ndf-done") return ndfSet(id, { done: el.checked });
+    if (a === "ndf-decide") return ndfSet(id, { decision: el.dataset.v });
+    if (a === "ndf-receipt") { receiptTarget = id; receiptInput.click(); return; }
+    if (a === "ndf-view") {
+      const u = ndfLine(id)?.receipt_img; if (!u) return;
+      const blob = await (await fetch(u)).blob();
+      window.open(URL.createObjectURL(blob), "_blank");
+      return;
+    }
+    if (a === "ndf-amount") {
+      const l = ndfLine(id);
+      const v = prompt("Montant TTC en € (tel que sur la facture)", l?.amount != null ? String(l.amount).replace(".", ",") : "");
+      if (v === null) return;
+      const n = parseAmount(v);
+      if (n === null) return say("Montant invalide");
+      return ndfSet(id, { amount_fixed: n });
+    }
+    if (a === "ndf-del") { if (confirm("Supprimer cette dépense ?")) await deleteDoc(ndfRef(id)); return; }
+  } catch (err) { say(`Action impossible : ${err.code || err.message}`); }
+}
+
+document.addEventListener("submit", async (e) => {
+  if (e.target.id !== "ndf-form") return;
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const amount = parseAmount(f.get("amount"));
+  if (amount === null) return say("Montant invalide");
+  showBusy("Ajout de la dépense…");
+  try {
+    const file = f.get("receipt");
+    const data = { custom: true, date: f.get("date"), category: f.get("category"), amount, vendor: f.get("vendor") || "", label: f.get("label") };
+    if (file && file.size) data.receipt_img = await receiptData(file);
+    await ndfSet("c-" + Date.now().toString(36), data);
+    e.target.reset();
+    say("Dépense ajoutée");
+  } catch (err) { say(`Dépense non ajoutée : ${err.code || err.message}`); }
+  finally { hideBusy(); }
+});

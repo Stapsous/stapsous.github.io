@@ -226,7 +226,7 @@ function renderEvent(e, tz, now, status) {
     </div></li>`;
 }
 
-export function renderTrip(trip, docs = {}, live = {}, now = Date.now()) {
+export function renderTrip(trip, docs = {}, live = {}, now = Date.now(), extra = "") {
   const tz = trip.tz || "Europe/Paris";
   const events = buildEvents(trip, live, docs);
   const days = [];
@@ -305,6 +305,7 @@ export function renderTrip(trip, docs = {}, live = {}, now = Date.now()) {
       <h2>Documents</h2>${docCards}
       ${parkingCard || hotelCard || refsCard ? `<h2>Pratique</h2>${parkingCard}${hotelCard}${refsCard}` : ""}
     </section>
+    ${extra}
     <footer>
       <span>Données mises à jour ${trip.updated_at ? `le ${esc(shortDate(trip.updated_at, tz))} à ${hhmm(trip.updated_at, tz)}` : ""}${polled ? ` · suivi des vols à ${hhmm(polled, tz)}` : ""}.</span>
       <span>Porte, retard et annulation s'affichent ici en direct et arrivent aussi par notification.</span>
