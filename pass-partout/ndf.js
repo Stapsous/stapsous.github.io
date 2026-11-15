@@ -2,7 +2,7 @@
 // Lignes : expenses de trips.yaml + dépenses ajoutées dans l'appli (trips/{id}/ndf/{ligne}, custom).
 // L'état par ligne (saisi, justificatif photo, montant corrigé, arbitrage pro/perso) vit dans la même sous-collection.
 
-import { esc, sec } from "./view.js?v=18";
+import { esc, sec } from "./view.js?v=20";
 
 export const CATEGORIES = ["Transport aérien", "Train", "Taxi / VTC", "Transports en commun", "Location de véhicule", "Carburant",
   "Péage", "Parking", "Indemnités kilométriques", "Hébergement", "Repas", "Repas d'affaires", "Autre"];

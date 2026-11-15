@@ -228,7 +228,7 @@ function renderEvent(e, tz, now, status) {
   const relTxt = isNext ? (t > now ? rel(t - now) : "maintenant") : "";
   const links = (e.links || []).map((l) => `<a class="btn${l.primary ? " primary" : ""}" href="${esc(l.url)}"${l.url.startsWith("#") ? "" : ' target="_blank" rel="noopener"'}>${esc(l.label)}</a>`).join("");
   return `<li class="ev${e.key ? " key" : ""}${past ? " past" : ""}${isNext ? " is-next" : ""}"${isNext ? ' aria-current="step"' : ""}${e.flightId ? ` data-flight="${esc(e.flightId)}"` : ""}>
-    ${icon(e.icon)}<span class="t"><span class="hl">${e.revised ? `${e.revised}<s>${hhmm(e.at, tz)}</s>` : e.estimated ? `≈${hhmm(e.at, tz)}<i>estimé</i>` : hhmm(e.at, tz)}</span></span>
+    <div class="lead"><span class="t"><span class="hl">${e.revised ? `${e.revised}<s>${hhmm(e.at, tz)}</s>` : e.estimated ? `≈${hhmm(e.at, tz)}<i>estimé</i>` : hhmm(e.at, tz)}</span></span>${icon(e.icon)}</div>
     <div class="body">
       <span class="title"><span class="hl">${esc(e.title)}</span>${isNext ? `<span class="rel">${esc(relTxt)}</span>` : ""}</span>
       ${e.chips?.length ? `<div class="chips">${e.chips.join("")}</div>` : ""}
