@@ -78,13 +78,14 @@ function liveChips(live, f, tz) {
   const st = { Boarding: "Embarquement", GateClosed: "Porte fermée", Departed: "Parti", EnRoute: "En vol", Arrived: "Arrivé",
     Canceled: "Annulé", Cancelled: "Annulé", CanceledUncertain: "Annulation possible", Diverted: "Dérouté", Delayed: "Retardé" }[live.status];
   const bad = ["Canceled", "Cancelled", "CanceledUncertain", "Diverted", "Delayed"].includes(live.status);
-  const delayed = live.delay_min >= 5 && live.revised_utc;
-  if (st && !(live.status === "Delayed" && delayed)) out.push(`<span class="chip ${bad ? "bad" : "live"}">${st}</span>`);
-  if (delayed) out.push(`<span class="chip bad">Retard ${live.delay_min} min · ${hhmm(live.revised_utc, tz)}</span>`);
+  const delayMin = live.revised_utc ? Math.round((new Date(live.revised_utc) - new Date(f.dep_at)) / 60000) : 0;
+  const delayed = delayMin >= 5;
+  if (st && !["Boarding", "GateClosed"].includes(live.status) && !(live.status === "Delayed" && delayed)) out.push(`<span class="chip ${bad ? "bad" : "live"}">${st}</span>`);
+  if (delayed) out.push(`<span class="chip bad">Retard ${delayMin} min · ${hhmm(live.revised_utc, tz)}</span>`);
   return out;
 }
 
-export function buildEvents(trip, live = {}) {
+export function buildEvents(trip, live = {}, docs = {}) {
   const tz = trip.tz || "Europe/Paris";
   const ev = [];
   const flights = trip.flights || [];
@@ -106,20 +107,36 @@ export function buildEvents(trip, live = {}) {
         chips: [`<span class="chip strong">${esc(f.booking_ref)}</span>`, `<span class="chip">jusqu'à 1 h avant le départ</span>`],
         links: f.checkin_url ? [{ label: `S'enregistrer chez ${f.airline}`, url: f.checkin_url }] : [] });
     }
-    const boardTxt = `Embarquement vers ${hhmm(f.boarding_at, tzDep)}${f.boarding_door ? `, par l'${f.boarding_door.toLowerCase()}` : ""}.`;
-    if (f.gate_close_at) {
-      ev.push({ at: f.gate_close_at, title: "Fermeture de la porte", text: `${boardTxt} Porte affichée sur les écrans environ 1 h avant.` });
-    }
+    // Embarquement : horaire et porte estimés tant que la compagnie ne les a pas donnés
+    const shiftMs = l && l.revised_utc ? new Date(l.revised_utc) - new Date(f.dep_at) : 0;
+    const boardAt = new Date(new Date(f.boarding_at).getTime() + shiftMs).toISOString();
+    const gateKnown = !!(l && l.gate);
+    const boarding = l && ["Boarding", "GateClosed"].includes(l.status);
+    const gateAnnounce = new Date(new Date(f.dep_at).getTime() + shiftMs - 60 * 60000).toISOString();
+    const bchips = [gateKnown
+      ? `<span class="chip live">Porte ${esc(l.gate)}</span>`
+      : `<span class="chip est">Porte à confirmer · affichée vers ${hhmm(gateAnnounce, tzDep)}</span>`];
+    if (l && l.terminal) bchips.push(`<span class="chip">Terminal ${esc(l.terminal)}</span>`);
+    if (boarding) bchips.unshift(`<span class="chip live">${l.status === "Boarding" ? "Embarquement en cours" : "Porte fermée"}</span>`);
+    if (f.seat) bchips.push(`<span class="chip strong">${esc(f.seat)}</span>`);
+    const btxt = [f.boarding_door ? `Embarquement par l'${f.boarding_door.toLowerCase()}.` : "",
+      f.gate_close_at ? `Porte fermée à ${hhmm(new Date(new Date(f.gate_close_at).getTime() + shiftMs).toISOString(), tzDep)}.` : "",
+      boarding ? "" : `Horaire estimé${f.boarding_before_min ? ` (${f.boarding_before_min} min avant le départ)` : ""}.`].filter(Boolean).join(" ");
+    const doc = f.boarding_pass && docs[f.boarding_pass];
+    ev.push({ at: boardAt, estimated: !boarding, title: `Embarquement ${f.airline} ${f.display || f.flight}`,
+      chips: bchips, text: btxt,
+      scan: doc ? { id: f.boarding_pass, img: doc.barcode || doc.image, label: doc.meta || doc.label } : null,
+      pendingScan: !doc ? (f.checkin_open_at ? `Carte d'embarquement disponible après l'enregistrement (${shortDate(f.checkin_open_at, tz)} à ${hhmm(f.checkin_open_at, tz)}).` : "Carte d'embarquement pas encore ajoutée.") : null });
+
     const chips = [];
     if (f.seat) chips.push(`<span class="chip strong">${esc(f.seat)}</span>`);
     if (f.booking_ref) chips.push(`<span class="chip">Réf. ${esc(f.booking_ref)}</span>`);
     if (f.bags) chips.push(`<span class="chip">${esc(f.bags)}</span>`);
     ev.push({ at: f.dep_at, key: true, flightId: f.id,
       title: `${f.airline} ${f.display || f.flight} · ${f.from} → ${f.to}`,
-      chips: [...liveChips(l, f, tzDep), ...chips], note: f.note,
-      text: f.gate_close_at ? "" : `${boardTxt} Porte connue après l'enregistrement ou sur les écrans.`,
-      revised: l && l.delay_min >= 5 && l.revised_utc ? hhmm(l.revised_utc, tzDep) : null,
-      links: [{ label: "Carte d'embarquement", url: `#doc-${f.id}`, primary: !!f.boarding_pass }] });
+      chips: [...liveChips(l, f, tzDep).filter((c) => !c.includes("Porte ")), ...chips], note: f.note,
+      revised: l && l.revised_utc && (new Date(l.revised_utc) - new Date(f.dep_at)) >= 5 * 60000 ? hhmm(l.revised_utc, tzDep) : null,
+      links: f.boarding_pass ? [{ label: "Carte complète", url: `#doc-${f.id}` }] : [] });
 
     const arrLinks = [];
     let arrText = "";
@@ -149,19 +166,21 @@ function renderEvent(e, tz, now) {
   const past = new Date(e.at).getTime() < now - 30 * 60000;
   const links = (e.links || []).map((l) => `<a class="btn${l.primary ? " primary" : ""}" href="${esc(l.url)}"${l.url.startsWith("#") ? "" : ' target="_blank" rel="noopener"'}>${esc(l.label)}</a>`).join("");
   return `<li class="ev${e.key ? " key" : ""}${past ? " past" : ""}"${e.flightId ? ` data-flight="${esc(e.flightId)}"` : ""}>
-    <span class="t">${e.revised ? `${e.revised}<s>${hhmm(e.at, tz)}</s>` : hhmm(e.at, tz)}</span>
+    <span class="t">${e.revised ? `${e.revised}<s>${hhmm(e.at, tz)}</s>` : e.estimated ? `≈${hhmm(e.at, tz)}<i>estimé</i>` : hhmm(e.at, tz)}</span>
     <div class="body">
       <span class="title">${esc(e.title)}</span>
       ${e.chips?.length ? `<div class="chips">${e.chips.join("")}</div>` : ""}
       ${e.note ? `<span class="note">${esc(e.note)}</span>` : ""}
       ${e.text ? `<span class="muted">${esc(e.text)}</span>` : ""}
+      ${e.scan ? `<button class="scanbox" type="button" data-scan="${esc(e.scan.id)}" aria-label="Afficher le code-barres en plein écran"><img src="${e.scan.img}" alt="Code-barres ${esc(e.scan.label || "")}"><span>${esc(e.scan.label || "")} · toucher pour agrandir</span></button>` : ""}
+      ${e.pendingScan ? `<span class="pending small">${esc(e.pendingScan)}</span>` : ""}
       ${links ? `<div class="btns">${links}</div>` : ""}
     </div></li>`;
 }
 
 export function renderTrip(trip, docs = {}, live = {}, now = Date.now()) {
   const tz = trip.tz || "Europe/Paris";
-  const events = buildEvents(trip, live);
+  const events = buildEvents(trip, live, docs);
   const days = [];
   events.forEach((e) => {
     const p = fmtParts(e.at, tz);

@@ -119,3 +119,10 @@ footer { font-size: .82rem; color: var(--muted); display: grid; gap: 4px; }
 /* Bandeau d'installation */
 .install { display: grid; gap: 8px; background: var(--surface); border: 1.5px solid var(--ink); border-radius: 14px; padding: 12px 14px; font-size: .92rem; }
 .install .btns { align-items: center; }
+
+/* Code-barres intégré à l'étape */
+.ev .t i { display: block; font-style: normal; font-weight: 500; color: var(--muted); font-size: .7rem; letter-spacing: .02em; }
+.chip.est { border-style: dashed; color: var(--muted); }
+.scanbox { display: grid; gap: 6px; justify-items: center; width: 100%; background: #fff; color: #12192b; border: 1px solid var(--line); border-radius: 10px; padding: 12px; cursor: zoom-in; font: 500 .8rem var(--font-code); }
+.scanbox img { width: 100%; max-width: 320px; height: auto; image-rendering: pixelated; }
+.scanbox:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
