@@ -1,0 +1,10 @@
+{
+  "name": "Pass-partout",
+  "short_name": "Pass-partout",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#12192b",
+  "theme_color": "#12192b",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
