@@ -1,0 +1,54 @@
+name: Pass-partout Android
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: apk-pass-partout
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm install -g @bubblewrap/cli
+      - name: Préparer la clé de signature et la configuration
+        env:
+          PW: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$PW" || { echo "::error::Secret ANDROID_KEY_PASSWORD absent"; exit 1; }
+          openssl enc -d -aes-256-cbc -pbkdf2 -in android/pass-partout/keystore.enc -out android/pass-partout/android.keystore -pass env:PW
+          # Bubblewrap cherche les outils du SDK dans <sdk>/tools : on y relie les outils actuels
+          [ -e "$ANDROID_HOME/tools" ] || sudo ln -sfn "$ANDROID_HOME/cmdline-tools/latest" "$ANDROID_HOME/tools"
+          mkdir -p ~/.bubblewrap
+          echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
+          cd android/pass-partout
+          jq --argjson c "${{ github.run_number }}" '.appVersionCode = $c | .appVersionName = ("1." + ($c|tostring))' twa-manifest.json > t.json && mv t.json twa-manifest.json
+      - name: Générer et compiler
+        working-directory: android/pass-partout
+        env:
+          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          set -o pipefail
+          report() { { grep -v '^\s*at ' build.log | grep -i -B2 -A10 'what went wrong\|error\|failed' | head -c 3000; echo ----; grep -v '^\s*at ' build.log | tail -c 800; } | sed 's/\x1b\[[0-9;]*m//g' | python3 -c 'import sys;print("::error title=Journal::"+sys.stdin.read().replace("%","%25").replace("\r","").replace("\n","%0A"))'; exit 1; }
+          bubblewrap update --skipVersionUpgrade < /dev/null 2>&1 | tee build.log || report
+          bubblewrap build --skipPwaValidation < /dev/null 2>&1 | tee build.log || report
+          ls -la *.apk
+      - name: Publier l APK sur le site
+        run: |
+          mkdir -p pass-partout/app
+          cp android/pass-partout/app-release-signed.apk pass-partout/app/pass-partout.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pass-partout/app/pass-partout.apk
+          git commit -m "Pass-partout Android ${{ github.run_number }}"
+          git pull --rebase -q && git push

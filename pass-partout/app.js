@@ -36,12 +36,16 @@ function screenLogin(msg) {
 let installEvt = null;
 const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isAndroid = /android/i.test(navigator.userAgent);
+const APK = "app/pass-partout.apk";
 const dismissed = () => { try { return localStorage.getItem("pp-install-dismissed") === "1"; } catch { return false; } };
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; render(); });
 window.addEventListener("appinstalled", () => { installEvt = null; render(); });
 
 function installBanner() {
   if (standalone() || dismissed()) return "";
+  if (isAndroid) return `<div class="install"><span>Installe l'appli Android : vraie icône sur l'écran d'accueil, plein écran, sans badge du navigateur.</span>
+    <div class="btns"><a class="btn primary" href="${APK}" download>Télécharger l'appli</a><button class="linkbtn" data-action="dismiss-install">Plus tard</button></div></div>`;
   if (installEvt) return `<div class="install"><span>Installe Pass-partout sur ton téléphone : icône sur l'écran d'accueil, ouverture même hors ligne.</span>
     <div class="btns"><button class="btn primary" data-action="install">Installer l'appli</button><button class="linkbtn" data-action="dismiss-install">Plus tard</button></div></div>`;
   if (isIOS) return `<div class="install"><span>Pour l'installer : bouton <b>Partager</b> de Safari, puis <b>Sur l'écran d'accueil</b>.</span>
