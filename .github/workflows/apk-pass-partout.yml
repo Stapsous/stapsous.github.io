@@ -51,4 +51,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add pass-partout/app/pass-partout.apk
           git commit -m "Pass-partout Android ${{ github.run_number }}"
-          git pull --rebase -q && git push
+          git checkout -- android && git pull --rebase -q && git push
