@@ -2,7 +2,7 @@
 // Lignes : expenses de trips.yaml + dépenses ajoutées dans l'appli (trips/{id}/ndf/{ligne}, custom).
 // L'état par ligne (saisi, justificatif photo, montant corrigé, arbitrage pro/perso) vit dans la même sous-collection.
 
-import { esc } from "./view.js?v=13";
+import { esc, sec } from "./view.js?v=14";
 
 export const CATEGORIES = ["Transport aérien", "Train", "Taxi / VTC", "Transports en commun", "Location de véhicule", "Carburant",
   "Péage", "Parking", "Indemnités kilométriques", "Hébergement", "Repas", "Repas d'affaires", "Autre"];
@@ -66,8 +66,7 @@ export function renderNdf(trip, st = {}) {
   const done = pro.filter((l) => l.done);
   const todo = pro.filter((l) => l.issues.length);
   const today = new Date().toISOString().slice(0, 10);
-  return `<section class="cards ndf">
-    <h2>Note de frais</h2>
+  return `<div class="ndf">${sec("ndf", "Note de frais", `
     <article class="card">
       <div class="row"><h3>Total pro</h3><span class="amt num">${money(total)} €</span></div>
       <span class="muted small">${done.length}/${pro.length} ligne(s) saisie(s) dans Unit4${todo.length ? ` · ${todo.length} à régler avant saisie` : ""}.</span>
@@ -86,6 +85,5 @@ export function renderNdf(trip, st = {}) {
         <label>Justificatif<input type="file" name="receipt" accept="image/*,application/pdf"></label>
         <button class="btn primary" type="submit">Ajouter</button>
       </form>
-    </details>
-  </section>`;
+    </details>`)}</div>`;
 }

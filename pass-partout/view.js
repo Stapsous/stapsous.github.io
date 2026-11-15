@@ -226,6 +226,11 @@ function renderEvent(e, tz, now, status) {
     </div></li>`;
 }
 
+// Section repliable (même mécanique que les jours : état gardé par app.js via data-day)
+export const sec = (key, title, body, open = true) =>
+  `<details class="day sec" id="sec-${key}" data-day="sec-${key}"${open ? " open" : ""}>
+    <summary class="day-head"><h2>${esc(title)}</h2></summary><div class="cards">${body}</div></details>`;
+
 export function renderTrip(trip, docs = {}, live = {}, now = Date.now(), extra = "") {
   const tz = trip.tz || "Europe/Paris";
   const events = buildEvents(trip, live, docs);
@@ -295,16 +300,20 @@ export function renderTrip(trip, docs = {}, live = {}, now = Date.now(), extra =
       <h1>${esc(trip.title)}, ${esc(fmtParts(trip.start_at, tz).day)} → ${esc(fmtParts(trip.end_at, tz).day)} ${esc(fmtParts(trip.end_at, tz).month)}</h1>
       ${trip.subtitle ? `<div class="muted">${esc(trip.subtitle)}</div>` : ""}
     </header>
+    <nav class="jump" aria-label="Aller à">
+      ${nx ? `<button type="button" data-jump="next">Prochaine étape</button>` : ""}
+      ${flights.length ? `<button type="button" data-jump="sec-docs">Documents</button>` : ""}
+      ${parkingCard || hotelCard || refsCard ? `<button type="button" data-jump="sec-pratique">Pratique</button>` : ""}
+      ${extra ? `<button type="button" data-jump="sec-ndf">NDF</button>` : ""}
+    </nav>
     ${days.map((d) => {
       const allPast = d.items.every((e) => statusOf(e) === "past");
       return `<details class="day" data-day="${esc(d.key)}"${allPast ? "" : " open"}>
         <summary class="day-head"><h2>${esc(d.label)}</h2><span class="d">${d.items.length} étape${d.items.length > 1 ? "s" : ""}${allPast ? " · passé" : ""}</span></summary>
         <ol class="timeline">${d.items.map((e) => renderEvent(e, tz, now, statusOf(e))).join("")}</ol></details>`;
     }).join("")}
-    <section class="cards">
-      <h2>Documents</h2>${docCards}
-      ${parkingCard || hotelCard || refsCard ? `<h2>Pratique</h2>${parkingCard}${hotelCard}${refsCard}` : ""}
-    </section>
+    ${sec("docs", "Documents", docCards)}
+    ${parkingCard || hotelCard || refsCard ? sec("pratique", "Infos pratiques", parkingCard + hotelCard + refsCard) : ""}
     ${extra}
     <footer>
       <span>Données mises à jour ${trip.updated_at ? `le ${esc(shortDate(trip.updated_at, tz))} à ${hhmm(trip.updated_at, tz)}` : ""}${polled ? ` · suivi des vols à ${hhmm(polled, tz)}` : ""}.</span>

@@ -159,3 +159,13 @@ footer { font-size: .82rem; color: var(--muted); display: grid; gap: 4px; }
 .nform { display: grid; gap: 10px; margin-top: 10px; }
 .nform label { display: grid; gap: 4px; font-size: .88rem; color: var(--muted); }
 .nform input, .nform select { font: 16px var(--font-body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; }
+
+/* Navigation rapide + sections repliables */
+.jump { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+  margin: 0 -16px; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.jump::-webkit-scrollbar { display: none; }
+.jump button { flex: none; font: 600 .85rem var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.jump button[data-jump="next"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.sec { scroll-margin-top: 56px; }
+.ndf-line, .ev { scroll-margin-top: 56px; }

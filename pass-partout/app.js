@@ -4,10 +4,10 @@ import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signI
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, collection, query, where, onSnapshot, doc, getDocs, writeBatch, setDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=13";
+import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=14";
 import { extract, normalize, buildTrips, dropKnown, htmlOf, GMAIL_QUERY } from "./importer.js?v=10";
 import { readCard, matchFlight, CARD_QUERY, attachmentsOf, b64urlToBlob } from "./cards.js?v=10";
-import { renderNdf, ndfLines } from "./ndf.js?v=13";
+import { renderNdf, ndfLines } from "./ndf.js?v=14";
 
 // Configuration publique du projet Firebase (protégée par les règles Firestore et les domaines autorisés).
 const FIREBASE_CONFIG = {
@@ -173,8 +173,16 @@ scan.addEventListener("click", (e) => { if (e.target === scan) scan.classList.re
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") scan.classList.remove("open"); });
 
 document.addEventListener("click", async (e) => {
-  const el = e.target.closest("[data-action],[data-copy],[data-scan]");
+  const el = e.target.closest("[data-action],[data-copy],[data-scan],[data-jump]");
   if (!el) return;
+  if (el.dataset.jump) {
+    const target = el.dataset.jump === "next" ? $app.querySelector(".ev.is-next") : document.getElementById(el.dataset.jump);
+    if (!target) return;
+    const d = target.closest("details") || target;
+    if (d.tagName === "DETAILS" && !d.open) d.open = true;
+    target.scrollIntoView({ block: el.dataset.jump === "next" ? "center" : "start", behavior: "smooth" });
+    return;
+  }
   if (el.dataset.scan) return openScan(el.dataset.scan);
   if (el.dataset.copy) {
     try { await navigator.clipboard.writeText(el.dataset.copy); say("Copié : " + el.dataset.copy.slice(0, 40)); } catch { say("Copie impossible : " + el.dataset.copy); }
