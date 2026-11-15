@@ -167,11 +167,10 @@ function renderEvent(e, tz, now, status) {
   const t = new Date(e.at).getTime();
   const relTxt = isNext ? (t > now ? rel(t - now) : "maintenant") : "";
   const links = (e.links || []).map((l) => `<a class="btn${l.primary ? " primary" : ""}" href="${esc(l.url)}"${l.url.startsWith("#") ? "" : ' target="_blank" rel="noopener"'}>${esc(l.label)}</a>`).join("");
-  return `<li class="ev${e.key ? " key" : ""}${past ? " past" : ""}${isNext ? " next" : ""}"${isNext ? ' aria-current="step"' : ""}${e.flightId ? ` data-flight="${esc(e.flightId)}"` : ""}>
-    <span class="t">${e.revised ? `${e.revised}<s>${hhmm(e.at, tz)}</s>` : e.estimated ? `≈${hhmm(e.at, tz)}<i>estimé</i>` : hhmm(e.at, tz)}</span>
+  return `<li class="ev${e.key ? " key" : ""}${past ? " past" : ""}${isNext ? " is-next" : ""}"${isNext ? ' aria-current="step"' : ""}${e.flightId ? ` data-flight="${esc(e.flightId)}"` : ""}>
+    <span class="t"><span class="hl">${e.revised ? `${e.revised}<s>${hhmm(e.at, tz)}</s>` : e.estimated ? `≈${hhmm(e.at, tz)}<i>estimé</i>` : hhmm(e.at, tz)}</span></span>
     <div class="body">
-      ${isNext ? `<span class="nextlbl">Prochaine étape · ${esc(relTxt)}</span>` : ""}
-      <span class="title">${esc(e.title)}</span>
+      <span class="title"><span class="hl">${esc(e.title)}</span>${isNext ? ` <span class="rel">${esc(relTxt)}</span>` : ""}</span>
       ${e.chips?.length ? `<div class="chips">${e.chips.join("")}</div>` : ""}
       ${e.note ? `<span class="note">${esc(e.note)}</span>` : ""}
       ${e.text ? `<span class="muted">${esc(e.text)}</span>` : ""}
@@ -246,7 +245,12 @@ export function renderTrip(trip, docs = {}, live = {}, now = Date.now()) {
       <h1>${esc(trip.title)}, ${esc(fmtParts(trip.start_at, tz).day)} → ${esc(fmtParts(trip.end_at, tz).day)} ${esc(fmtParts(trip.end_at, tz).month)}</h1>
       ${trip.subtitle ? `<div class="muted">${esc(trip.subtitle)}</div>` : ""}
     </header>
-    ${days.map((d) => `<section class="day"><div class="day-head"><h2>${esc(d.label)}</h2></div><ol class="timeline">${d.items.map((e) => renderEvent(e, tz, now, statusOf(e))).join("")}</ol></section>`).join("")}
+    ${days.map((d) => {
+      const allPast = d.items.every((e) => statusOf(e) === "past");
+      return `<details class="day" data-day="${esc(d.key)}"${allPast ? "" : " open"}>
+        <summary class="day-head"><h2>${esc(d.label)}</h2><span class="d">${d.items.length} étape${d.items.length > 1 ? "s" : ""}${allPast ? " · passé" : ""}</span></summary>
+        <ol class="timeline">${d.items.map((e) => renderEvent(e, tz, now, statusOf(e))).join("")}</ol></details>`;
+    }).join("")}
     <section class="cards">
       <h2>Documents</h2>${docCards}
       ${parkingCard || hotelCard || refsCard ? `<h2>Pratique</h2>${parkingCard}${hotelCard}${refsCard}` : ""}

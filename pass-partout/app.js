@@ -4,7 +4,7 @@ import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signI
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, collection, query, where, onSnapshot, doc, getDocs }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=5";
+import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=6";
 
 // Configuration publique du projet Firebase (protégée par les règles Firestore et les domaines autorisés).
 const FIREBASE_CONFIG = {
@@ -61,9 +61,15 @@ function render() {
   if (!trip) { $app.innerHTML = renderHome(state.trips, state.user); return; }
   watchTrip(trip.id);
   $app.innerHTML = installBanner() + renderTrip(trip, state.docs[trip.id] || {}, state.live[trip.id] || {});
+  // Garder les jours pliés/dépliés à la main lors des rafraîchissements
+  $app.querySelectorAll("details.day").forEach((d) => {
+    const k = trip.id + "|" + d.dataset.day;
+    if (k in dayOpen) d.open = dayOpen[k];
+    d.addEventListener("toggle", () => { dayOpen[k] = d.open; });
+  });
   if (scrolledTo !== trip.id) { // à l'ouverture d'un voyage, amener la prochaine étape à l'écran
     scrolledTo = trip.id;
-    const nx = $app.querySelector(".ev.next");
+    const nx = $app.querySelector(".ev.is-next");
     if (nx && !location.hash.startsWith("#doc-")) nx.scrollIntoView({ block: "center" });
   }
 }
@@ -71,6 +77,7 @@ function render() {
 // ---------------------------------------------------------------- Firebase
 
 let auth, db, watched = null, liveUnsub = null, scrolledTo = null;
+const dayOpen = {};
 
 function watchTrip(id) {
   if (watched === id) return;
@@ -162,7 +169,7 @@ window.addEventListener("hashchange", () => {
   }
   scrolledTo = null;
   render();
-  if (!$app.querySelector(".ev.next")) window.scrollTo(0, 0);
+  if (!$app.querySelector(".ev.is-next")) window.scrollTo(0, 0);
 });
 setInterval(() => { if (state.user && state.loaded && !scan.classList.contains("open")) render(); }, 60000);
 
