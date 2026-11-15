@@ -7,7 +7,14 @@ import { initializeFirestore, persistentLocalCache, collection, query, where, on
 import { esc, renderHome, renderTrip, defaultTrip } from "./view.js";
 
 // Configuration publique du projet Firebase (protégée par les règles Firestore et les domaines autorisés).
-const FIREBASE_CONFIG = null; // à remplir
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDxvbB-2FfRZUQTJ8Oc4WdCAa4lh-TrBnA",
+  authDomain: "pass-partout-6c2c9.firebaseapp.com",
+  projectId: "pass-partout-6c2c9",
+  storageBucket: "pass-partout-6c2c9.firebasestorage.app",
+  messagingSenderId: "919954413000",
+  appId: "1:919954413000:web:a12bb4b8c4e23a82fbdcfd",
+};
 
 const $app = document.getElementById("app");
 const state = { user: null, trips: [], loaded: false, docs: {}, live: {}, unsub: [], error: null };
