@@ -114,6 +114,13 @@ export function buildEvents(trip, live = {}, docs = {}) {
         chips: [`<span class="chip strong">${esc(f.booking_ref)}</span>`, `<span class="chip">jusqu'à 1 h avant le départ</span>`],
         links: f.checkin_url ? [{ label: `S'enregistrer chez ${f.airline}`, url: f.checkin_url }] : [] });
     }
+    // Dépose des bagages en soute (si le vol en a)
+    if (f.bagdrop_open_at) {
+      const n = Number(f.checked_bags) || 1;
+      ev.push({ icon: "bag", at: f.bagdrop_open_at, title: `Dépose bagages ${f.airline}`,
+        chips: [`<span class="chip strong">${n} bagage${n > 1 ? "s" : ""} en soute</span>`, `<span class="chip bad">ferme à ${hhmm(f.bagdrop_close_at, tz)}</span>`],
+        text: `Comptoir ${f.airline} ouvert de ${hhmm(f.bagdrop_open_at, tz)} à ${hhmm(f.bagdrop_close_at, tz)}${f.from_terminal ? `, terminal ${f.from_terminal}` : ""}. Carte d'embarquement et pièce d'identité en main.` });
+    }
     // Embarquement : horaire et porte estimés tant que la compagnie ne les a pas donnés
     const shiftMs = l && l.revised_utc ? new Date(l.revised_utc) - new Date(f.dep_at) : 0;
     const boardAt = new Date(new Date(f.boarding_at).getTime() + shiftMs).toISOString();
@@ -213,6 +220,7 @@ const ICONS = {
   boarding: '<path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v8a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2z"/><path d="M15 6v2m0 3v2m0 3v2"/>',
   takeoff: '<path d="M2 20h20"/><path d="M3.5 14.5l2.3 2.1c.4.3.9.4 1.4.3L21 13.4a1.6 1.6 0 0 0-.8-3.1l-4.6 1.2L9.5 6.5l-2.3.6 3.3 5.1-3.4.9-2-1.4-1.7.5z"/>',
   landing: '<path d="M2 20h20"/><path d="M3.8 6.6l.7 5.4c.1.5.4.9.9 1.1l13.6 3.6a1.6 1.6 0 0 0 .8-3.1l-4.6-1.2-2.7-7.4-2.3-.6.7 6-3.4-.9-.8-2.3z"/>',
+  bag: '<rect x="5" y="7" width="14" height="13" rx="2"/><path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7M9 11v5M15 11v5"/>',
   hotel: '<path d="M3 19V6M3 15h18v4M21 15v-3a3 3 0 0 0-3-3h-7v6"/><circle cx="7" cy="11" r="2"/>',
   train: '<rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14M9 20l-2 2m8-2l2 2M9 13h.01M15 13h.01"/>',
   bus: '<rect x="4" y="3" width="16" height="15" rx="2.5"/><path d="M4 11h16M7 21v-3m10 3v-3M8 14.5h.01M16 14.5h.01"/>',
