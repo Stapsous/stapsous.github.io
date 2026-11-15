@@ -134,8 +134,9 @@ export function buildEvents(trip, live = {}, docs = {}) {
     ev.push({ at: boardAt,
       links: viaParking ? [] : [{ label: `Itinéraire vers ${f.from_name || "l'aéroport"}`, url: maps(airport, "transit") }], estimated: !boarding, title: `Embarquement ${f.airline} ${f.display || f.flight}`,
       chips: bchips, text: btxt,
+      flightRef: f.id,
       scan: doc ? { id: f.boarding_pass, img: doc.barcode || doc.image, label: doc.meta || doc.label } : null,
-      pendingScan: !doc ? (f.checkin_open_at ? `Carte d'embarquement disponible après l'enregistrement (${shortDate(f.checkin_open_at, tz)} à ${hhmm(f.checkin_open_at, tz)}).` : "Carte d'embarquement pas encore ajoutée.") : null });
+      pendingScan: !doc ? (f.checkin_open_at ? `Carte d'embarquement disponible après l'enregistrement (${shortDate(f.checkin_open_at, tz)} à ${hhmm(f.checkin_open_at, tz)}).` : "Pas encore de carte d'embarquement. Ajoute le PDF ou une capture depuis l'appli de la compagnie.") : null });
 
     const chips = [];
     if (f.seat) chips.push(`<span class="chip strong">${esc(f.seat)}</span>`);
@@ -206,7 +207,8 @@ function renderEvent(e, tz, now, status) {
       ${e.note ? `<span class="note">${esc(e.note)}</span>` : ""}
       ${e.text ? `<span class="muted">${esc(e.text)}</span>` : ""}
       ${e.scan ? `<button class="scanbox" type="button" data-scan="${esc(e.scan.id)}" aria-label="Afficher le code-barres en plein écran"><img src="${e.scan.img}" alt="Code-barres ${esc(e.scan.label || "")}"><span>${esc(e.scan.label || "")} · toucher pour agrandir</span></button>` : ""}
-      ${e.pendingScan ? `<span class="pending small">${esc(e.pendingScan)}</span>` : ""}
+      ${e.pendingScan ? `<div class="pending small">${esc(e.pendingScan)}
+        <div class="btns center"><button class="btn" type="button" data-action="add-card" data-flight="${esc(e.flightRef)}">Ajouter la carte</button><button class="btn" type="button" data-action="gmail-card" data-flight="${esc(e.flightRef)}">Chercher dans Gmail</button></div></div>` : ""}
       ${links ? `<div class="btns">${links}</div>` : ""}
     </div></li>`;
 }
@@ -229,13 +231,15 @@ export function renderTrip(trip, docs = {}, live = {}, now = Date.now()) {
   const docCards = flights.map((f) => {
     const d = f.boarding_pass && docs[f.boarding_pass];
     const head = `<div class="row"><h3>${esc(f.airline)} ${esc(f.display || f.flight)}</h3><span class="muted num">${esc(shortDate(f.dep_at, tz))} · ${hhmm(f.dep_at, tz)}</span></div>`;
-    if (d && d.image) {
+    const manage = `<div class="btns"><button class="btn" type="button" data-action="add-card" data-flight="${esc(f.id)}">${d ? "Remplacer la carte" : "Ajouter la carte"}</button>${d ? (d.uid ? `<button class="linkbtn" type="button" data-action="del-card" data-flight="${esc(f.id)}">Supprimer</button>` : "") : `<button class="btn" type="button" data-action="gmail-card" data-flight="${esc(f.id)}">Chercher dans Gmail</button>`}</div>`;
+    if (d && (d.image || d.barcode)) {
       return `<article class="card" id="doc-${esc(f.id)}">${head}
-        <button class="bp" type="button" data-scan="${esc(f.boarding_pass)}" aria-label="Afficher le code-barres en plein écran"><img src="${d.image}" alt="Carte d'embarquement ${esc(d.label || "")}"></button>
-        <span class="muted small">Touche la carte pour afficher le code-barres en grand. Monte la luminosité. L'appli de la compagnie reste la version de référence.</span></article>`;
+        <button class="bp" type="button" data-scan="${esc(f.boarding_pass)}" aria-label="Afficher le code-barres en plein écran"><img src="${d.image || d.barcode}" alt="Carte d'embarquement ${esc(d.label || "")}"></button>
+        ${d.meta ? `<span class="code small">${esc(d.meta)}</span>` : ""}
+        <span class="muted small">Touche la carte pour afficher le code-barres en grand. Monte la luminosité. L'appli de la compagnie reste la version de référence.</span>${manage}</article>`;
     }
     const msg = f.checkin_open_at ? `Disponible après l'enregistrement, à partir du ${shortDate(f.checkin_open_at, tz)} à ${hhmm(f.checkin_open_at, tz)}.` : "Pas encore de carte d'embarquement.";
-    return `<article class="card" id="doc-${esc(f.id)}">${head}<div class="pending">${esc(msg)}<br>Envoie-la à Claude pour l'ajouter ici.</div></article>`;
+    return `<article class="card" id="doc-${esc(f.id)}">${head}<div class="pending">${esc(msg)}</div>${manage}</article>`;
   }).join("");
 
   const p = trip.parking, h = trip.hotel;

@@ -2,10 +2,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, reauthenticateWithPopup }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, collection, query, where, onSnapshot, doc, getDocs, writeBatch }
+import { initializeFirestore, persistentLocalCache, collection, query, where, onSnapshot, doc, getDocs, writeBatch, setDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=9";
-import { extract, normalize, buildTrips, dropKnown, htmlOf, GMAIL_QUERY } from "./importer.js?v=9";
+import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=10";
+import { extract, normalize, buildTrips, dropKnown, htmlOf, GMAIL_QUERY } from "./importer.js?v=10";
+import { readCard, matchFlight, CARD_QUERY, attachmentsOf, b64urlToBlob } from "./cards.js?v=10";
 
 // Configuration publique du projet Firebase (protégée par les règles Firestore et les domaines autorisés).
 const FIREBASE_CONFIG = {
@@ -18,7 +19,7 @@ const FIREBASE_CONFIG = {
 };
 
 const $app = document.getElementById("app");
-const state = { user: null, trips: [], loaded: false, docs: {}, live: {}, unsub: [], error: null };
+const state = { user: null, trips: [], loaded: false, docs: {}, cards: {}, live: {}, unsub: [], error: null };
 
 function screenLogin(msg) {
   $app.innerHTML = `<div class="login">
@@ -61,7 +62,14 @@ function render() {
   }
   if (!trip) { $app.innerHTML = renderHome(state.trips, state.user); return; }
   watchTrip(trip.id);
-  $app.innerHTML = installBanner() + renderTrip(trip, state.docs[trip.id] || {}, state.live[trip.id] || {});
+  const docs = { ...(state.docs[trip.id] || {}) };
+  const cards = state.cards[trip.id] || {};
+  const shown = { ...trip, flights: (trip.flights || []).map((f) => {
+    if (!cards[f.id]) return f;
+    docs["card-" + f.id] = cards[f.id]; // une carte ajoutée depuis l'appli remplace celle de trips.yaml
+    return { ...f, boarding_pass: "card-" + f.id };
+  }) };
+  $app.innerHTML = installBanner() + renderTrip(shown, docs, state.live[trip.id] || {});
   // Garder les jours pliés/dépliés à la main lors des rafraîchissements
   $app.querySelectorAll("details.day").forEach((d) => {
     const k = trip.id + "|" + d.dataset.day;
@@ -77,13 +85,19 @@ function render() {
 
 // ---------------------------------------------------------------- Firebase
 
-let auth, db, watched = null, liveUnsub = null, scrolledTo = null;
+let auth, db, watched = null, liveUnsub = null, cardsUnsub = null, scrolledTo = null;
 const dayOpen = {};
 
 function watchTrip(id) {
   if (watched === id) return;
   watched = id;
   if (liveUnsub) liveUnsub();
+  if (cardsUnsub) cardsUnsub();
+  // Cartes d'embarquement ajoutées depuis l'appli
+  cardsUnsub = onSnapshot(collection(db, "trips", id, "cards"), (snap) => {
+    state.cards[id] = Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
+    render();
+  }, (e) => console.warn("cards", e));
   // Porte, retard, statut en direct
   liveUnsub = onSnapshot(collection(db, "trips", id, "live"), (snap) => {
     state.live[id] = Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
@@ -126,11 +140,11 @@ function start() {
 
 const toast = document.getElementById("toast");
 let tt;
-function say(msg) { toast.textContent = msg; toast.classList.add("show"); clearTimeout(tt); tt = setTimeout(() => toast.classList.remove("show"), 1800); }
+function say(msg) { toast.textContent = msg; toast.classList.add("show"); clearTimeout(tt); tt = setTimeout(() => toast.classList.remove("show"), 3500); }
 
 const scan = document.getElementById("scan");
 function openScan(docId) {
-  const d = (state.docs[watched] || {})[docId];
+  const d = docId.startsWith("card-") ? (state.cards[watched] || {})[docId.slice(5)] : (state.docs[watched] || {})[docId];
   if (!d) return;
   document.getElementById("scan-img").src = d.barcode || d.image;
   document.getElementById("scan-meta").textContent = d.meta || d.label || "";
@@ -161,6 +175,24 @@ document.addEventListener("click", async (e) => {
   if (el.dataset.action === "install" && installEvt) { installEvt.prompt(); await installEvt.userChoice; installEvt = null; render(); return; }
   if (el.dataset.action === "dismiss-install") { try { localStorage.setItem("pp-install-dismissed", "1"); } catch {} render(); return; }
   if (el.dataset.action === "scan-gmail") { scanGmail(); return; }
+  if (el.dataset.action === "add-card") { cardTarget = el.dataset.flight; fileInput.click(); return; }
+  if (el.dataset.action === "del-card") {
+    const m = findFlight(el.dataset.flight);
+    if (m) { await deleteDoc(doc(db, "trips", m.trip.id, "cards", m.flight.id)); say("Carte supprimée"); }
+    return;
+  }
+  if (el.dataset.action === "gmail-card") {
+    try {
+      const token = await gmailToken();
+      showBusy("Recherche de la carte dans Gmail…");
+      const r = await cardsFromGmail(token, showBusy);
+      say(r.added ? `${r.added} carte(s) trouvée(s)` : "Aucune carte d'embarquement trouvée dans les mails récents");
+    } catch (e) {
+      const code = e.code || e.message;
+      if (code !== "auth/popup-closed-by-user" && code !== "auth/cancelled-popup-request") say(String(code).includes("403") ? "Accès Gmail refusé : compte non autorisé comme testeur" : `Recherche impossible : ${code}`);
+    } finally { hideBusy(); }
+    return;
+  }
   if (el.dataset.action === "logout") { await signOut(auth); history.replaceState(null, "", location.pathname); }
 });
 
@@ -179,18 +211,90 @@ async function gmail(token, path) {
   return r.json();
 }
 
+async function gmailToken() {
+  const provider = new GoogleAuthProvider();
+  provider.addScope("https://www.googleapis.com/auth/gmail.readonly");
+  provider.setCustomParameters({ login_hint: state.user.email });
+  const res = await reauthenticateWithPopup(state.user, provider);
+  const token = GoogleAuthProvider.credentialFromResult(res)?.accessToken;
+  if (!token) throw new Error("pas de jeton Gmail");
+  return token;
+}
+
+// ---------------------------------------------------------------- cartes d'embarquement
+
+const busy = document.createElement("div");
+busy.className = "busy"; busy.innerHTML = "<div role=\"status\"></div>";
+document.body.appendChild(busy);
+const showBusy = (msg) => { busy.firstChild.textContent = msg; busy.classList.add("open"); };
+const hideBusy = () => busy.classList.remove("open");
+
+const fileInput = document.createElement("input");
+fileInput.type = "file"; fileInput.accept = "application/pdf,image/*,.pkpass,application/vnd.apple.pkpass"; fileInput.hidden = true;
+document.body.appendChild(fileInput);
+let cardTarget = null;
+
+function findFlight(id) {
+  for (const t of state.trips) for (const f of t.flights || []) if (f.id === id) return { trip: t, flight: f };
+  return null;
+}
+
+async function saveCard(card, target, source) {
+  const b = card.bcbp;
+  const m = (b && matchFlight(b, state.trips)) || target;
+  if (!m) throw new Error("Vol introuvable pour cette carte");
+  const meta = b ? [b.name, `${b.carrier}${b.flight}`, b.seat && `place ${b.seat}`, b.pnr, b.seq && `séq. ${b.seq}`].filter(Boolean).join(" · ") : "";
+  await setDoc(doc(db, "trips", m.trip.id, "cards", m.flight.id), {
+    uid: state.user.uid, source, added_at: new Date().toISOString(), format: card.format, text: card.text,
+    barcode: card.barcode, image: card.image || null, meta, label: `${m.flight.airline} ${m.flight.display || m.flight.flight}`,
+    seat: b?.seat || null, seq: b?.seq || null,
+  });
+  return m;
+}
+
+fileInput.addEventListener("change", async () => {
+  const file = fileInput.files[0];
+  fileInput.value = "";
+  if (!file) return;
+  showBusy("Lecture de la carte d'embarquement…");
+  try {
+    const card = await readCard(file, file.name);
+    const target = cardTarget && findFlight(cardTarget);
+    const m = await saveCard(card, target, "upload");
+    say(m.flight.id === cardTarget || !cardTarget ? "Carte ajoutée" : `Carte rangée sur le vol ${m.flight.display || m.flight.flight}`);
+  } catch (e) {
+    say(/NotFound|No MultiFormat|not found/i.test(String(e)) || e.name === "NotFoundException" ? "Code-barres illisible : essaie le PDF d'origine ou une capture plus nette" : `Ajout impossible : ${e.message || e}`);
+  } finally { hideBusy(); }
+});
+
+/** Cherche les cartes d'embarquement en pièce jointe des mails récents et les range sur les vols. */
+async function cardsFromGmail(token, onProgress = () => {}) {
+  const r = await gmail(token, `messages?maxResults=30&q=${encodeURIComponent(CARD_QUERY)}`);
+  const ids = (r.messages || []).map((m) => m.id);
+  let added = 0, i = 0;
+  for (const id of ids) {
+    onProgress(`Cartes d'embarquement : mail ${++i} / ${ids.length}`);
+    try {
+      const msg = await gmail(token, `messages/${id}?format=full`);
+      for (const a of attachmentsOf(msg.payload)) {
+        try {
+          const att = await gmail(token, `messages/${id}/attachments/${a.id}`);
+          const card = await readCard(b64urlToBlob(att.data, a.type), a.name);
+          if (card.bcbp && matchFlight(card.bcbp, state.trips)) { await saveCard(card, null, "gmail"); added++; }
+        } catch { /* pièce jointe sans code-barres lisible */ }
+      }
+    } catch (e) { console.warn("carte", id, e); }
+  }
+  return { added, mails: ids.length };
+}
+
 let scanning = false;
 async function scanGmail() {
   if (scanning) return;
   scanning = true;
   try {
     setScan("Autorisation Gmail…");
-    const provider = new GoogleAuthProvider();
-    provider.addScope("https://www.googleapis.com/auth/gmail.readonly");
-    provider.setCustomParameters({ login_hint: state.user.email });
-    const res = await reauthenticateWithPopup(state.user, provider);
-    const token = GoogleAuthProvider.credentialFromResult(res)?.accessToken;
-    if (!token) throw new Error("pas de jeton Gmail");
+    const token = await gmailToken();
 
     setScan("Recherche des confirmations…");
     let ids = [], page = "";
@@ -231,9 +335,11 @@ async function scanGmail() {
     await batch.commit();
 
     const n = fresh.filter(Boolean).length;
-    setScan(trips.length
+    const cards = await cardsFromGmail(token, setScan).catch(() => ({ added: 0 }));
+    const cardTxt = cards.added ? ` ${cards.added} carte(s) d'embarquement ajoutée(s).` : "";
+    setScan((trips.length
       ? `${trips.length} voyage(s) importé(s) à partir de ${n} réservation(s) sur ${ids.length} mails lus.`
-      : `Aucune nouvelle réservation reconnue dans ${ids.length} mails. Les confirmations sans données structurées ne sont pas encore lues automatiquement.`);
+      : `Aucune nouvelle réservation reconnue dans ${ids.length} mails. Les confirmations sans données structurées ne sont pas encore lues automatiquement.`) + cardTxt);
   } catch (e) {
     const code = e.code || e.message;
     setScan(code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request" ? "Scan annulé."
