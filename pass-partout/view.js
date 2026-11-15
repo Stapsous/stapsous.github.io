@@ -95,7 +95,8 @@ export function buildEvents(trip, live = {}, docs = {}) {
   const tz = trip.tz || "Europe/Paris";
   const ev = [];
   const flights = trip.flights || [];
-  const p = trip.parking, h = trip.hotel;
+  const p = trip.parking;
+  const hotels = trip.hotels || (trip.hotel ? [trip.hotel] : []);
   const last = flights[flights.length - 1];
 
   if (p) {
@@ -157,11 +158,17 @@ export function buildEvents(trip, live = {}, docs = {}) {
     ev.push({ at: f.arr_at, title: `Arrivée ${f.to_name || f.to}${f.to_terminal ? `, terminal ${f.to_terminal}` : ""}`, text: arrText, links: arrLinks });
   });
 
-  if (h) {
-    ev.push({ at: h.checkin_at, title: `Check-in ${h.name}`, text: `${h.address}. Bagages déposables avant si besoin.`,
-      links: [{ label: "Itinéraire vers l'hôtel", url: maps(`${h.name}, ${h.address}`, "transit") }] });
-    ev.push({ at: h.checkout_at, title: `Check-out ${h.name}`, text: h.to_pay ? `À régler : ${h.to_pay}.` : "" });
-  }
+  hotels.forEach((h, i) => {
+    const prev = hotels[i - 1], next = hotels[i + 1];
+    const tag = hotels.length > 1 && h.booking_ref ? ` (résa ${h.booking_ref})` : "";
+    const sameAsPrev = prev && prev.name === h.name && prev.checkout_at.slice(0, 10) === h.checkin_at.slice(0, 10);
+    const sameAsNext = next && next.name === h.name && h.checkout_at.slice(0, 10) === next.checkin_at.slice(0, 10);
+    ev.push({ at: h.checkin_at, title: sameAsPrev ? `Nouvelle réservation ${h.name}${tag}` : `Check-in ${h.name}${tag}`,
+      text: sameAsPrev ? "Même hôtel : voir à la réception si la chambre change." : `${h.address}. Bagages déposables avant si besoin.`,
+      links: sameAsPrev ? [] : [{ label: "Itinéraire vers l'hôtel", url: maps(`${h.name}, ${h.address}`, "transit") }] });
+    ev.push({ at: h.checkout_at, title: sameAsNext ? `Fin de la réservation${tag}` : `Check-out ${h.name}${tag}`,
+      text: h.to_pay ? `À régler : ${h.to_pay}.` : "" });
+  });
   // Autres réservations importées des mails : trains, cars, locations, événements, restaurants
   (trip.extras || []).forEach((x) => {
     const ref = x.ref ? [`<span class="chip">Réf. ${esc(x.ref)}</span>`] : [];
@@ -248,7 +255,8 @@ export function renderTrip(trip, docs = {}, live = {}, now = Date.now()) {
     return `<article class="card" id="doc-${esc(f.id)}">${head}<div class="pending">${esc(msg)}</div>${manage}</article>`;
   }).join("");
 
-  const p = trip.parking, h = trip.hotel;
+  const p = trip.parking;
+  const hotels = trip.hotels || (trip.hotel ? [trip.hotel] : []);
   const parkingCard = p ? `<article class="card">
       <div class="row"><h3>${esc(p.name)}</h3>${p.ticket ? `<span class="muted">e-billet ${esc(p.ticket)}</span>` : ""}</div>
       <div class="row" style="align-items:center"><span class="bigcode">${esc(p.code)}</span><button class="btn" type="button" data-copy="${esc(p.code)}">Copier</button></div>
@@ -260,7 +268,7 @@ export function renderTrip(trip, docs = {}, live = {}, now = Date.now()) {
       </dl>
       <div class="btns"><a class="btn primary" href="${esc(maps(p.place || p.name, "driving"))}" target="_blank" rel="noopener">Itinéraire vers le parking</a></div>
     </article>` : "";
-  const hotelCard = h ? `<article class="card">
+  const hotelCard = hotels.map((h) => `<article class="card">
       <div class="row"><h3>${esc(h.name)}</h3></div>
       <dl class="num">
         <dt>Adresse</dt><dd>${esc(h.address)}</dd>
@@ -270,12 +278,13 @@ export function renderTrip(trip, docs = {}, live = {}, now = Date.now()) {
         ${h.room ? `<dt>Chambre</dt><dd>${esc(h.room)}</dd>` : ""}
         ${h.to_pay ? `<dt>À payer</dt><dd>${esc(h.to_pay)}</dd>` : ""}
         ${h.phone ? `<dt>Téléphone</dt><dd>${esc(h.phone)}</dd>` : ""}
+        ${h.notes ? `<dt>À savoir</dt><dd>${esc(h.notes)}</dd>` : ""}
       </dl>
       <div class="btns">
         <a class="btn primary" href="${esc(maps(`${h.name}, ${h.address}`, "transit"))}" target="_blank" rel="noopener">Itinéraire vers l'hôtel</a>
         ${h.precheckin_url ? `<a class="btn" href="${esc(h.precheckin_url)}" target="_blank" rel="noopener">Pré-enregistrement</a>` : ""}
       </div>
-    </article>` : "";
+    </article>`).join("");
   const refsCard = trip.refs?.length ? `<article class="card"><h3>Références</h3><dl>${trip.refs.map((r) => `<dt>${esc(r.label)}</dt><dd class="code">${esc(r.value)}</dd>`).join("")}</dl></article>` : "";
   const polled = Object.values(live).map((l) => l.polled_at).filter(Boolean).sort().pop();
 
