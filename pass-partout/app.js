@@ -29,13 +29,30 @@ function screenLogin(msg) {
   </div>`;
 }
 
+// ---------------------------------------------------------------- installation (PWA)
+let installEvt = null;
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const dismissed = () => { try { return localStorage.getItem("pp-install-dismissed") === "1"; } catch { return false; } };
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; render(); });
+window.addEventListener("appinstalled", () => { installEvt = null; render(); });
+
+function installBanner() {
+  if (standalone() || dismissed()) return "";
+  if (installEvt) return `<div class="install"><span>Installe Pass-partout sur ton téléphone : icône sur l'écran d'accueil, ouverture même hors ligne.</span>
+    <div class="btns"><button class="btn primary" data-action="install">Installer l'appli</button><button class="linkbtn" data-action="dismiss-install">Plus tard</button></div></div>`;
+  if (isIOS) return `<div class="install"><span>Pour l'installer : bouton <b>Partager</b> de Safari, puis <b>Sur l'écran d'accueil</b>.</span>
+    <div class="btns"><button class="linkbtn" data-action="dismiss-install">OK</button></div></div>`;
+  return "";
+}
+
 function render() {
   if (!FIREBASE_CONFIG) { $app.innerHTML = `<p class="err">Configuration Firebase manquante.</p>`; return; }
   if (!state.user) return screenLogin(state.error);
   if (!state.loaded) { $app.innerHTML = `<div class="loading">Chargement des voyages…</div>`; return; }
   const h = location.hash.replace(/^#/, "");
   const id = h.startsWith("doc-") ? (watched || "") : h;
-  if (id === "voyages" || !state.trips.length) { $app.innerHTML = renderHome(state.trips, state.user); return; }
+  if (id === "voyages" || !state.trips.length) { $app.innerHTML = installBanner() + renderHome(state.trips, state.user); return; }
   let trip = state.trips.find((t) => t.id === id);
   if (!trip) {
     trip = defaultTrip(state.trips);
@@ -43,7 +60,7 @@ function render() {
   }
   if (!trip) { $app.innerHTML = renderHome(state.trips, state.user); return; }
   watchTrip(trip.id);
-  $app.innerHTML = renderTrip(trip, state.docs[trip.id] || {}, state.live[trip.id] || {});
+  $app.innerHTML = installBanner() + renderTrip(trip, state.docs[trip.id] || {}, state.live[trip.id] || {});
 }
 
 // ---------------------------------------------------------------- Firebase
@@ -128,6 +145,8 @@ document.addEventListener("click", async (e) => {
       if (err.code !== "auth/popup-closed-by-user" && err.code !== "auth/cancelled-popup-request") { state.error = `Connexion impossible : ${err.code}`; render(); }
     }
   }
+  if (el.dataset.action === "install" && installEvt) { installEvt.prompt(); await installEvt.userChoice; installEvt = null; render(); return; }
+  if (el.dataset.action === "dismiss-install") { try { localStorage.setItem("pp-install-dismissed", "1"); } catch {} render(); return; }
   if (el.dataset.action === "logout") { await signOut(auth); history.replaceState(null, "", location.pathname); }
 });
 

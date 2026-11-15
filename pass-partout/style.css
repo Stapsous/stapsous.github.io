@@ -115,3 +115,7 @@ footer { font-size: .82rem; color: var(--muted); display: grid; gap: 4px; }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 10px; font-size: .9rem; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .toast.show { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+/* Bandeau d'installation */
+.install { display: grid; gap: 8px; background: var(--surface); border: 1.5px solid var(--ink); border-radius: 14px; padding: 12px 14px; font-size: .92rem; }
+.install .btns { align-items: center; }
