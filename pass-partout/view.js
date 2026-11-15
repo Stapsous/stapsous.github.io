@@ -62,6 +62,12 @@ export function renderHome(trips, user, now = Date.now()) {
   return `
     <div class="topbar"><span class="brand">Pass-partout</span><button class="linkbtn" data-action="logout">Déconnexion</button></div>
     <header class="trip"><h1>Mes voyages</h1><span class="muted small">${esc(user?.email || "")}</span></header>
+    <section class="scan card">
+      <div class="row"><h3>Importer depuis Gmail</h3></div>
+      <span class="muted small">Cherche tes confirmations de vols, hôtels, trains et locations des 12 derniers mois et crée les voyages. Lecture seule, rien n'est conservé à part les voyages trouvés.</span>
+      <div class="btns"><button class="btn primary" type="button" data-action="scan-gmail">Scanner mes mails</button></div>
+      <span class="small" id="scan-status" aria-live="polite"></span>
+    </section>
     ${trips.length ? "" : `<p class="empty">Aucun voyage pour ce compte pour l'instant.</p>`}
     ${section("En cours", groups.now, "now")}
     ${section("À venir", groups.soon, "soon")}
@@ -155,6 +161,25 @@ export function buildEvents(trip, live = {}, docs = {}) {
       links: [{ label: "Itinéraire vers l'hôtel", url: maps(`${h.name}, ${h.address}`, "transit") }] });
     ev.push({ at: h.checkout_at, title: `Check-out ${h.name}`, text: h.to_pay ? `À régler : ${h.to_pay}.` : "" });
   }
+  // Autres réservations importées des mails : trains, cars, locations, événements, restaurants
+  (trip.extras || []).forEach((x) => {
+    const ref = x.ref ? [`<span class="chip">Réf. ${esc(x.ref)}</span>`] : [];
+    if (x.kind === "train" || x.kind === "bus") {
+      const label = x.kind === "train" ? "Train" : "Car";
+      ev.push({ at: x.at, key: true, title: `${label} ${[x.operator, x.number].filter(Boolean).join(" ")} · ${x.from_name} → ${x.to_name}`,
+        chips: [...(x.seat ? [`<span class="chip strong">${x.coach ? "Voiture " + esc(x.coach) + " · " : ""}Place ${esc(x.seat)}</span>`] : []), ...ref],
+        links: [{ label: `Itinéraire vers ${x.from_name}`, url: maps(x.from_name, "transit") }] });
+      if (x.end && x.end !== x.at) ev.push({ at: x.end, title: `Arrivée ${x.to_name}` });
+    } else if (x.kind === "car") {
+      ev.push({ at: x.at, title: `Prise du véhicule ${x.company || ""}`.trim(), chips: ref, text: x.pickup,
+        links: x.pickup ? [{ label: "Itinéraire vers l'agence", url: maps(x.pickup, "transit") }] : [] });
+      if (x.end && x.end !== x.at) ev.push({ at: x.end, title: "Restitution du véhicule", text: x.dropoff,
+        links: x.dropoff ? [{ label: "Itinéraire vers l'agence", url: maps(x.dropoff, "driving") }] : [] });
+    } else {
+      ev.push({ at: x.at, title: x.name || (x.kind === "restaurant" ? "Restaurant" : "Événement"), chips: ref, text: x.address,
+        links: x.address ? [{ label: "Itinéraire", url: maps(x.address, "transit") }] : [] });
+    }
+  });
   return ev.filter((e) => e.at).sort((a, b) => new Date(a.at) - new Date(b.at));
 }
 

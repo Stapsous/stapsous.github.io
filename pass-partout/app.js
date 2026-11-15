@@ -1,10 +1,11 @@
 // Pass-partout : connexion Google, lecture Firestore (règles : seuls les comptes listés dans viewers), rendu.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut }
+import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, reauthenticateWithPopup }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, collection, query, where, onSnapshot, doc, getDocs }
+import { initializeFirestore, persistentLocalCache, collection, query, where, onSnapshot, doc, getDocs, writeBatch }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=8";
+import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=9";
+import { extract, normalize, buildTrips, dropKnown, htmlOf, GMAIL_QUERY } from "./importer.js?v=9";
 
 // Configuration publique du projet Firebase (protégée par les règles Firestore et les domaines autorisés).
 const FIREBASE_CONFIG = {
@@ -52,7 +53,7 @@ function render() {
   if (!state.loaded) { $app.innerHTML = `<div class="loading">Chargement des voyages…</div>`; return; }
   const h = location.hash.replace(/^#/, "");
   const id = h.startsWith("doc-") ? (watched || "") : h;
-  if (id === "voyages" || !state.trips.length) { $app.innerHTML = installBanner() + renderHome(state.trips, state.user); return; }
+  if (id === "voyages" || !state.trips.length) { $app.innerHTML = installBanner() + renderHome(state.trips, state.user); setScan(scanStatus); return; }
   let trip = state.trips.find((t) => t.id === id);
   if (!trip) {
     trip = defaultTrip(state.trips);
@@ -159,8 +160,90 @@ document.addEventListener("click", async (e) => {
   }
   if (el.dataset.action === "install" && installEvt) { installEvt.prompt(); await installEvt.userChoice; installEvt = null; render(); return; }
   if (el.dataset.action === "dismiss-install") { try { localStorage.setItem("pp-install-dismissed", "1"); } catch {} render(); return; }
+  if (el.dataset.action === "scan-gmail") { scanGmail(); return; }
   if (el.dataset.action === "logout") { await signOut(auth); history.replaceState(null, "", location.pathname); }
 });
+
+// ---------------------------------------------------------------- import Gmail (dans le navigateur, lecture seule)
+
+let scanStatus = "";
+function setScan(msg) {
+  scanStatus = msg;
+  const el = document.getElementById("scan-status");
+  if (el) el.textContent = msg;
+}
+
+async function gmail(token, path) {
+  const r = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/" + path, { headers: { Authorization: "Bearer " + token } });
+  if (!r.ok) throw new Error(`Gmail ${r.status}`);
+  return r.json();
+}
+
+let scanning = false;
+async function scanGmail() {
+  if (scanning) return;
+  scanning = true;
+  try {
+    setScan("Autorisation Gmail…");
+    const provider = new GoogleAuthProvider();
+    provider.addScope("https://www.googleapis.com/auth/gmail.readonly");
+    provider.setCustomParameters({ login_hint: state.user.email });
+    const res = await reauthenticateWithPopup(state.user, provider);
+    const token = GoogleAuthProvider.credentialFromResult(res)?.accessToken;
+    if (!token) throw new Error("pas de jeton Gmail");
+
+    setScan("Recherche des confirmations…");
+    let ids = [], page = "";
+    do {
+      const r = await gmail(token, `messages?maxResults=100&q=${encodeURIComponent(GMAIL_QUERY)}${page ? "&pageToken=" + page : ""}`);
+      ids = ids.concat((r.messages || []).map((m) => m.id));
+      page = r.nextPageToken || "";
+    } while (page && ids.length < 400);
+
+    const items = [];
+    let done = 0;
+    const queue = ids.slice();
+    const worker = async () => {
+      while (queue.length) {
+        const id = queue.shift();
+        try {
+          const m = await gmail(token, `messages/${id}?format=full`);
+          const html = htmlOf(m.payload);
+          if (/ld\+json|itemscope/i.test(html)) extract(html).forEach((r) => items.push(normalize(r)));
+        } catch (e) { console.warn("message", id, e); }
+        done++;
+        if (done % 5 === 0 || done === ids.length) setScan(`Lecture des mails : ${done} / ${ids.length} · ${items.filter(Boolean).length} réservation(s) trouvée(s)`);
+      }
+    };
+    await Promise.all(Array.from({ length: 6 }, worker));
+
+    const uid = state.user.uid, email = state.user.email.toLowerCase();
+    const mine = state.trips.filter((t) => t.source === "gmail" && t.owner_uid === uid);
+    const others = state.trips.filter((t) => !(t.source === "gmail" && t.owner_uid === uid));
+    const fresh = dropKnown(items, others);
+    const trips = buildTrips(fresh, { email, uid });
+
+    setScan("Enregistrement…");
+    const batch = writeBatch(db);
+    const keep = new Set(trips.map((t) => t.id));
+    mine.filter((t) => !keep.has(t.id)).forEach((t) => batch.delete(doc(db, "trips", t.id)));
+    trips.forEach((t) => batch.set(doc(db, "trips", t.id), JSON.parse(JSON.stringify(t))));
+    await batch.commit();
+
+    const n = fresh.filter(Boolean).length;
+    setScan(trips.length
+      ? `${trips.length} voyage(s) importé(s) à partir de ${n} réservation(s) sur ${ids.length} mails lus.`
+      : `Aucune nouvelle réservation reconnue dans ${ids.length} mails. Les confirmations sans données structurées ne sont pas encore lues automatiquement.`);
+  } catch (e) {
+    const code = e.code || e.message;
+    setScan(code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request" ? "Scan annulé."
+      : code === "auth/popup-blocked" ? "La fenêtre Google a été bloquée : autorise les pop-ups pour ce site."
+      : String(code).includes("403") ? "Accès Gmail refusé : ce compte doit être ajouté comme testeur de l'appli (demande à Antoine)."
+      : `Scan impossible : ${code}`);
+  } finally {
+    scanning = false;
+  }
+}
 
 window.addEventListener("hashchange", () => {
   if (location.hash.startsWith("#doc-")) { // ancre vers une carte d'embarquement

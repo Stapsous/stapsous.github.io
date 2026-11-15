@@ -1,6 +1,6 @@
 // Pass-partout : l'appli s'ouvre même sans réseau (les données viennent du cache Firestore).
-const VERSION = "pp-8";
-const SHELL = ["./", "index.html", "style.css", "app.js", "view.js", "manifest.webmanifest",
+const VERSION = "pp-9";
+const SHELL = ["./", "index.html", "style.css", "app.js", "view.js", "importer.js", "manifest.webmanifest",
   "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "icon.svg"];
 
 self.addEventListener("install", (e) => {
