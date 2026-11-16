@@ -101,7 +101,7 @@ export function buildEvents(trip, live = {}, docs = {}) {
 
   if (p) {
     ev.push({ icon: "parking", at: p.access_at || p.entry_at, title: p.name,
-      chips: [`<span class="chip strong">${esc(p.code)}</span>`],
+      chips: [`<span class="chip strong">${esc(p.code)}</span>`, ...(p.spot ? [`<span class="chip">Place ${esc(p.spot)}</span>`] : [])],
       text: `Accès possible dès ${hhmm(p.access_at || p.entry_at, tz)} (réservé à ${hhmm(p.entry_at, tz)}). ${p.instructions || ""}`,
       links: [{ label: "Itinéraire vers le parking", url: maps(p.place || p.name, "driving") }] });
   }
@@ -156,13 +156,14 @@ export function buildEvents(trip, live = {}, docs = {}) {
       revised: l && l.revised_utc && (new Date(l.revised_utc) - new Date(f.dep_at)) >= 5 * 60000 ? hhmm(l.revised_utc, tzDep) : null,
       links: f.boarding_pass ? [{ label: "Carte complète", url: `#doc-${f.id}` }] : [] });
 
-    const arrLinks = [];
+    const arrLinks = [], arrChips = [];
     let arrText = "";
     if (f === last && flights.length > 1) {
-      if (p) arrText = `Puis ${p.name} : sortie prévue ${hhmm(p.exit_at, tz)}${p.tolerance_h ? `, tolérance de ${p.tolerance_h} h sans supplément` : ""}. Ticket d'entrée à présenter.`;
+      if (p && p.spot) arrChips.push(`<span class="chip strong">Voiture place ${esc(p.spot)}</span>`);
+      if (p) arrText = `Puis ${p.name}${p.spot ? `, voiture garée place ${p.spot}` : ""} : sortie prévue ${hhmm(p.exit_at, tz)}${p.tolerance_h ? `, tolérance de ${p.tolerance_h} h sans supplément` : ""}. Ticket d'entrée à présenter.`;
       if (trip.home) arrLinks.push({ label: "Itinéraire vers la maison", url: maps(trip.home, "driving") });
     }
-    ev.push({ icon: "landing", at: f.arr_at, title: `Arrivée ${f.to_name || f.to}${f.to_terminal ? `, terminal ${f.to_terminal}` : ""}`, text: arrText, links: arrLinks });
+    ev.push({ icon: "landing", at: f.arr_at, title: `Arrivée ${f.to_name || f.to}${f.to_terminal ? `, terminal ${f.to_terminal}` : ""}`, text: arrText, chips: arrChips, links: arrLinks });
   });
 
   hotels.forEach((h, i) => {
@@ -289,6 +290,7 @@ export function renderTrip(trip, docs = {}, live = {}, now = Date.now(), extra =
       <div class="row"><h3>${esc(p.name)}</h3>${p.ticket ? `<span class="muted">e-billet ${esc(p.ticket)}</span>` : ""}</div>
       <div class="row" style="align-items:center"><span class="bigcode">${esc(p.code)}</span><button class="btn" type="button" data-copy="${esc(p.code)}">Copier</button></div>
       <dl class="num">
+        ${p.spot ? `<dt>Place</dt><dd><strong>${esc(p.spot)}</strong></dd>` : ""}
         <dt>Entrée</dt><dd>${esc(shortDate(p.entry_at, tz))} · ${hhmm(p.entry_at, tz)}${p.access_at && p.access_at !== p.entry_at ? ` (dès ${hhmm(p.access_at, tz)})` : ""}</dd>
         <dt>Sortie</dt><dd>${esc(shortDate(p.exit_at, tz))} · ${hhmm(p.exit_at, tz)}${p.tolerance_h ? ` (+${p.tolerance_h} h tolérées)` : ""}</dd>
         ${p.instructions ? `<dt>À la borne</dt><dd>${esc(p.instructions)}</dd>` : ""}

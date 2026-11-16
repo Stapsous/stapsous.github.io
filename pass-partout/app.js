@@ -4,10 +4,10 @@ import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signI
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, collection, query, where, onSnapshot, doc, getDocs, writeBatch, setDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=24";
+import { esc, renderHome, renderTrip, defaultTrip } from "./view.js?v=25";
 import { extract, normalize, buildTrips, dropKnown, htmlOf, GMAIL_QUERY } from "./importer.js?v=10";
 import { readCard, matchFlight, CARD_QUERY, attachmentsOf, b64urlToBlob } from "./cards.js?v=10";
-import { renderNdf, ndfLines } from "./ndf.js?v=24";
+import { renderNdf, ndfLines } from "./ndf.js?v=25";
 
 // Configuration publique du projet Firebase (protégée par les règles Firestore et les domaines autorisés).
 const FIREBASE_CONFIG = {
